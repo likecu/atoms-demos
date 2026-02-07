@@ -28,6 +28,18 @@ export default function SandpackPreview() {
         };
     }, [code]);
 
+    // 如果代码为空，不渲染任何内容
+    if (!code || code.trim() === "") {
+        return (
+            <div className="h-full w-full flex items-center justify-center bg-zinc-900 text-zinc-500">
+                <div className="text-center max-w-md px-4">
+                    <p className="text-sm">暂无预览内容</p>
+                    <p className="text-xs text-zinc-600 mt-2">在左侧对话中描述您想要的 UI，AI 将为您生成代码和预览</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="h-full w-full relative">
             {isLoading && (

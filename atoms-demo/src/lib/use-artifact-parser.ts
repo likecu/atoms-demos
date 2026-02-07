@@ -16,16 +16,16 @@ export function useArtifactParser() {
     const codeBlockRegex = /```(\w+)?\s*([\s\S]*?)```/g;
     const matches = Array.from(content.matchAll(codeBlockRegex));
 
-    console.log('[ArtifactParser] Extracting code. Content length:', content.length, 'Matches found:', matches.length);
-
     if (matches.length === 0) {
-      console.warn('[ArtifactParser] No code block matches found in content:', content.substring(0, 50) + '...');
+      // 没有找到代码块是正常情况，不需要警告
       return {
         code: "",
         language: "",
         hasCode: false,
       };
     }
+
+    console.log('[ArtifactParser] Found code block. Content length:', content.length, 'Matches found:', matches.length);
 
     const latestMatch = matches[matches.length - 1];
     // latestMatch[0] is full match, [1] is language, [2] is code content
