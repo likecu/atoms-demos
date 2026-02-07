@@ -32,12 +32,14 @@ import {
     Files,
     Activity,
     Edit3,
+    Share2,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TerminalPanel } from '@/components/sandbox/terminal-panel'
 import { FileExplorer } from '@/components/chat/file-explorer'
 import { AIStatusPanel } from '@/components/chat/ai-status-panel'
 import { DraggableCanvas } from '@/components/ui/draggable-canvas'
+import { ShareDialog } from '@/components/chat/share-dialog'
 
 /**
  * 消息类型定义
@@ -109,6 +111,7 @@ export default function ChatPageClient({
     const [isEditingName, setIsEditingName] = useState(false)
     const [currentProjectName, setCurrentProjectName] = useState(projectName)
     const [isRenaming, setIsRenaming] = useState(false)
+    const [isShareDialogOpen, setIsShareDialogOpen] = useState(false)
 
     // Maintain messages state locally
     const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || [])
@@ -118,7 +121,7 @@ export default function ChatPageClient({
 
 
 
-    const { setCode } = useAppContext()
+    const { code, setCode } = useAppContext()
     const { parseAndSet } = useArtifactParser()
     const { toast } = useToast()
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -363,6 +366,18 @@ export default function ChatPageClient({
                     )}
                 </div>
 
+                {/* 分享按钮 */}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsShareDialogOpen(true)}
+                    className="gap-2 mr-2"
+                    disabled={!code}
+                >
+                    <Share2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">分享</span>
+                </Button>
+
                 {/* 用户菜单 */}
                 <UserMenu />
             </header>
@@ -573,6 +588,14 @@ export default function ChatPageClient({
                     </ResizablePanel>
                 </ResizablePanelGroup>
             </main>
+
+            {/* 分享对话框 */}
+            <ShareDialog
+                open={isShareDialogOpen}
+                onOpenChange={setIsShareDialogOpen}
+                projectId={projectId}
+                code={code || ''}
+            />
         </div>
     )
 }
