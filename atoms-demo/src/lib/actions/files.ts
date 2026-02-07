@@ -40,3 +40,26 @@ export async function getProjectFiles(projectId: string, subPath: string = ''): 
         return [];
     }
 }
+
+/**
+ * Get the content of a specific file in the project
+ * @param projectId - The project ID
+ * @param filePath - The relative path to the file
+ */
+export async function getProjectFileContent(projectId: string, filePath: string): Promise<string> {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+        throw new Error('Unauthorized');
+    }
+
+    const manager = SandboxManager.getInstance();
+
+    try {
+        // Ensure workspace is initialized (though likely already is if listing files)
+        await manager.initWorkspace(projectId);
+        return await manager.readFile(projectId, filePath);
+    } catch (error) {
+        console.error(`Error reading file ${filePath}:`, error);
+        throw new Error('Failed to read file content');
+    }
+}

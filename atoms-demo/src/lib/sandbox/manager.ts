@@ -171,4 +171,21 @@ export class SandboxManager {
             throw e;
         }
     }
+
+    /**
+     * Read file content from the user's workspace
+     */
+    async readFile(userId: string, filePath: string): Promise<string> {
+        const fullPath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId, filePath);
+        try {
+            // Security check: ensure the path is within the user's workspace
+            if (!fullPath.startsWith(path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId))) {
+                throw new Error('Access denied: File path outside workspace');
+            }
+            return await fs.readFile(fullPath, 'utf-8');
+        } catch (e) {
+            console.error(`Failed to read file ${filePath} for ${userId}:`, e);
+            throw e;
+        }
+    }
 }
