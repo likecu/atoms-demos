@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Folder, File, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getProjectFiles, FileItem } from "@/lib/actions/files";
+import { getProjectFiles, FileItem, getProjectFileContent } from "@/lib/actions/files";
+import { FilePreviewDialog } from "./file-preview-dialog";
 
 interface FileExplorerProps {
     projectId: string;
@@ -14,6 +15,11 @@ export function FileExplorer({ projectId }: FileExplorerProps) {
     const [files, setFiles] = useState<FileItem[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Preview state
+    const [previewFile, setPreviewFile] = useState<{ name: string; content: string | null } | null>(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
     const loadFiles = async () => {
         setIsLoading(true);
@@ -26,6 +32,24 @@ export function FileExplorer({ projectId }: FileExplorerProps) {
             console.error(err);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleFileClick = async (file: FileItem) => {
+        if (file.type === 'directory') return;
+
+        setIsPreviewOpen(true);
+        setPreviewFile({ name: file.name, content: null });
+        setIsLoadingPreview(true);
+
+        try {
+            const content = await getProjectFileContent(projectId, file.name);
+            setPreviewFile({ name: file.name, content });
+        } catch (err) {
+            console.error("Failed to load file content:", err);
+            setPreviewFile({ name: file.name, content: "Error loading file content" });
+        } finally {
+            setIsLoadingPreview(false);
         }
     };
 
@@ -69,6 +93,7 @@ export function FileExplorer({ projectId }: FileExplorerProps) {
                     {files.map((file) => (
                         <div
                             key={file.name}
+                            onClick={() => handleFileClick(file)}
                             className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-600 rounded-md hover:bg-white hover:shadow-sm cursor-pointer transition-all"
                         >
                             {file.type === 'directory' ? (
@@ -81,6 +106,14 @@ export function FileExplorer({ projectId }: FileExplorerProps) {
                     ))}
                 </div>
             </ScrollArea>
+
+            <FilePreviewDialog
+                isOpen={isPreviewOpen}
+                onClose={() => setIsPreviewOpen(false)}
+                fileName={previewFile?.name || ""}
+                content={previewFile?.content ?? null}
+                isLoading={isLoadingPreview}
+            />
         </div>
     );
 }

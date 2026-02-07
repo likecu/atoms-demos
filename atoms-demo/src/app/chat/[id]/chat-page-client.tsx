@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast'
 import SandpackPreview from '@/components/preview/sandpack-preview'
 import { useAppContext } from '@/lib/context'
 import { useArtifactParser } from '@/lib/use-artifact-parser'
+
 import { updateProjectCode, updateProjectName } from '@/lib/actions/project'
 import { getMessagesByProjectId, getAICallLogsByProjectId, type AICallLog } from '@/lib/actions/message'
 import {
@@ -36,6 +37,7 @@ import { Input } from '@/components/ui/input'
 import { TerminalPanel } from '@/components/sandbox/terminal-panel'
 import { FileExplorer } from '@/components/chat/file-explorer'
 import { AIStatusPanel } from '@/components/chat/ai-status-panel'
+import { DraggableCanvas } from '@/components/ui/draggable-canvas'
 
 /**
  * 消息类型定义
@@ -109,6 +111,8 @@ export default function ChatPageClient({
     // Maintain messages state locally
     const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || [])
     const router = useRouter()
+
+
 
 
 
@@ -381,7 +385,7 @@ export default function ChatPageClient({
                 <ResizablePanelGroup
                     orientation="horizontal"
                     className="flex-1 h-full"
-                    id="chat-layout-v2"
+                    id="chat-layout-v3"
                 >
                     {isSidebarVisible && (
                         <>
@@ -390,7 +394,7 @@ export default function ChatPageClient({
                                 defaultSize="30%"
                                 minSize="20%"
                                 maxSize="50%"
-                                className="flex flex-col h-full bg-zinc-50/50 relative"
+                                className="flex flex-col h-full bg-zinc-50/50 relative border-r z-20 shadow-xl"
                             >
                                 {/* 侧边栏头部 */}
                                 <div className="flex items-center justify-between p-4 border-b bg-white/50">
@@ -478,25 +482,22 @@ export default function ChatPageClient({
                                 </div>
                             </ResizablePanel>
 
-                            <ResizableHandle withHandle />
+                            <ResizableHandle withHandle className="z-20 bg-transparent hover:bg-indigo-500/50 transition-colors w-1" />
                         </>
                     )}
 
-                    {/* 代码预览与终端区域 */}
-                    <ResizablePanel
-                        defaultSize={isSidebarVisible ? "70%" : "100%"}
-                        minSize="30%"
-                        className="h-full bg-zinc-900"
-                    >
-                        <div className="flex flex-col h-full">
-                            {/* 顶部标签栏 */}
-                            <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center px-4 gap-2">
+                    {/* 代码预览与终端区域 - 使用 DraggableCanvas */}
+                    <ResizablePanel defaultSize={isSidebarVisible ? "70%" : "100%"}>
+                        {/* 引用 DraggableCanvas 组件 */}
+                        <div className="h-full w-full relative bg-zinc-950">
+                            {/* 顶部标签栏 - 悬浮在画布上方 */}
+                            <div className="absolute top-4 left-4 z-40 bg-zinc-900/90 backdrop-blur-md border border-zinc-800 rounded-lg flex items-center p-1 gap-1 shadow-lg">
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => setActiveTab('preview')}
-                                    className={`h-8 gap-2 ${activeTab === 'preview'
-                                        ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                    className={`h-7 px-3 text-xs gap-2 rounded-md ${activeTab === 'preview'
+                                        ? 'bg-zinc-800 text-white shadow-sm'
                                         : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
                                 >
                                     <Play className="w-3 h-3" />
@@ -506,8 +507,8 @@ export default function ChatPageClient({
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => setActiveTab('terminal')}
-                                    className={`h-8 gap-2 ${activeTab === 'terminal'
-                                        ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                    className={`h-7 px-3 text-xs gap-2 rounded-md ${activeTab === 'terminal'
+                                        ? 'bg-zinc-800 text-white shadow-sm'
                                         : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
                                 >
                                     <TerminalSquare className="w-3 h-3" />
@@ -517,8 +518,8 @@ export default function ChatPageClient({
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => setActiveTab('files')}
-                                    className={`h-8 gap-2 ${activeTab === 'files'
-                                        ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                    className={`h-7 px-3 text-xs gap-2 rounded-md ${activeTab === 'files'
+                                        ? 'bg-zinc-800 text-white shadow-sm'
                                         : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
                                 >
                                     <Files className="w-3 h-3" />
@@ -528,8 +529,8 @@ export default function ChatPageClient({
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => setActiveTab('ai-status')}
-                                    className={`h-8 gap-2 ${activeTab === 'ai-status'
-                                        ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                    className={`h-7 px-3 text-xs gap-2 rounded-md ${activeTab === 'ai-status'
+                                        ? 'bg-zinc-800 text-white shadow-sm'
                                         : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
                                 >
                                     <Activity className="w-3 h-3" />
@@ -538,22 +539,30 @@ export default function ChatPageClient({
                             </div>
 
                             {/* 内容区域 */}
-                            <div className="flex-1 overflow-hidden relative">
-                                <div className={`absolute inset-0 transition-opacity duration-300 ${activeTab === 'preview' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
-                                    <SandpackPreview />
-                                </div>
+                            <div className="w-full h-full text-white">
+                                {activeTab === 'preview' && (
+                                    <DraggableCanvas
+                                        defaultWidth="100%"
+                                        defaultHeight="100%"
+                                    >
+                                        <SandpackPreview />
+                                    </DraggableCanvas>
+                                )}
+
                                 {activeTab === 'terminal' && (
-                                    <div className="absolute inset-0 z-10 bg-black">
+                                    <div className="w-full h-full bg-black pt-16">
                                         <TerminalPanel projectId={projectId} className="h-full border-none rounded-none" />
                                     </div>
                                 )}
+
                                 {activeTab === 'files' && (
-                                    <div className="absolute inset-0 z-10 bg-zinc-50">
+                                    <div className="w-full h-full bg-zinc-50 pt-16">
                                         <FileExplorer projectId={projectId} />
                                     </div>
                                 )}
+
                                 {activeTab === 'ai-status' && (
-                                    <div className="absolute inset-0 z-10 bg-zinc-950">
+                                    <div className="w-full h-full bg-zinc-950 pt-16">
                                         <AIStatusPanel logs={aiLogs} />
                                     </div>
                                 )}
