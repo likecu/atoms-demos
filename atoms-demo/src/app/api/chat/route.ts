@@ -86,8 +86,12 @@ For code, wrap it in markdown code blocks with the appropriate language tag.`;
           messages: messages,
           tools: tools,
 
-          // 允许最多 5 步执行 (防止无限循环)
-          stopWhen: stepCountIs(5),
+          // 智能停止条件: AI自然完成或达到100步上限
+          stopWhen: ({ steps }) => {
+            // 当AI真正完成任务时停止,或防止无限循环
+            const lastStep = steps[steps.length - 1];
+            return lastStep?.finishReason === 'stop' || steps.length >= 100;
+          },
 
           // 每步完成时的回调
           onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {
@@ -176,7 +180,16 @@ For code, wrap it in markdown code blocks with the appropriate language tag.`;
             content: result.text,
             metadata: {
               totalSteps: result.steps.length,
-              totalUsage: result.usage,
+              // 保存完整的usage对象,包括嵌套的raw属性
+              totalUsage: result.usage ? {
+                inputTokens: result.usage.inputTokens,
+                outputTokens: result.usage.outputTokens,
+                totalTokens: result.usage.totalTokens,
+                reasoningTokens: result.usage.reasoningTokens || 0,
+                cachedInputTokens: result.usage.cachedInputTokens || 0,
+                // 保留raw原始数据以供调试
+                raw: (result.usage as any).raw
+              } : null,
               finishReason: result.finishReason
             }
           });

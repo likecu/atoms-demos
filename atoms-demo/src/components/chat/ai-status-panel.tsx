@@ -95,6 +95,38 @@ export function AIStatusPanel({ logs }: AIStatusPanelProps) {
                                 </div>
                                 <div className="space-y-1">
                                     <span className="text-[10px] text-zinc-500 uppercase font-bold">元数据</span>
+                                    {selectedLog.metadata?.totalUsage && (
+                                        <div className="mb-2 p-2 bg-indigo-500/10 border border-indigo-500/30 rounded">
+                                            <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                                <div>
+                                                    <span className="text-zinc-500">输入 Tokens:</span>
+                                                    <span className="ml-1 text-indigo-400 font-mono font-bold">
+                                                        {selectedLog.metadata.totalUsage.inputTokens || 0}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-zinc-500">输出 Tokens:</span>
+                                                    <span className="ml-1 text-emerald-400 font-mono font-bold">
+                                                        {selectedLog.metadata.totalUsage.outputTokens || 0}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-zinc-500">总计:</span>
+                                                    <span className="ml-1 text-amber-400 font-mono font-bold">
+                                                        {selectedLog.metadata.totalUsage.totalTokens || 0}
+                                                    </span>
+                                                </div>
+                                                {selectedLog.metadata.totalUsage.reasoningTokens > 0 && (
+                                                    <div>
+                                                        <span className="text-zinc-500">推理:</span>
+                                                        <span className="ml-1 text-purple-400 font-mono font-bold">
+                                                            {selectedLog.metadata.totalUsage.reasoningTokens}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                     <pre className="text-[11px] bg-black/50 p-2 rounded border border-zinc-800 overflow-x-auto whitespace-pre-wrap">
                                         {JSON.stringify(selectedLog.metadata, null, 2)}
                                     </pre>

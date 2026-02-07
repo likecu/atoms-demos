@@ -127,7 +127,7 @@ export default function RegistrationPage() {
 }`;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [code, setCode] = useState(REGISTRATION_PAGE_CODE);
+  const [code, setCode] = useState("");
 
   return (
     <AppContext.Provider value={{ code, setCode }}>

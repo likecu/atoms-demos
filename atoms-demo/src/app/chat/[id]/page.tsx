@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { getProjectById } from '@/lib/actions/project'
-import { getMessagesByProjectId } from '@/lib/actions/message'
+import { getMessagesByProjectId, getAICallLogsByProjectId } from '@/lib/actions/message'
 import { getCurrentUserId } from '@/lib/supabase-server'
 import ChatPageClient from './chat-page-client'
 
@@ -35,6 +35,9 @@ export default async function ChatPage({ params }: PageProps) {
     // 获取历史消息
     const messages = await getMessagesByProjectId(id)
 
+    // 获取AI调用日志
+    const aiLogs = await getAICallLogsByProjectId(id)
+
     // 转换消息格式以适配客户端组件
     const initialMessages = messages.map(m => ({
         id: m.id,
@@ -49,6 +52,7 @@ export default async function ChatPage({ params }: PageProps) {
             projectName={project.name}
             initialCode={project.current_code || ''}
             initialMessages={initialMessages}
+            initialAILogs={aiLogs}
         />
     )
 }

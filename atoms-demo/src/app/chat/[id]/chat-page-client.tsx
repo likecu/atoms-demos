@@ -57,6 +57,7 @@ interface ChatPageClientProps {
     projectName: string
     initialCode: string
     initialMessages: ChatMessage[]
+    initialAILogs: AICallLog[]
 }
 
 /**
@@ -97,13 +98,14 @@ export default function ChatPageClient({
     projectName,
     initialCode,
     initialMessages,
+    initialAILogs,
 }: ChatPageClientProps) {
     const [isSidebarVisible, setIsSidebarVisible] = useState(true)
     const [isMounted, setIsMounted] = useState(false)
     const [inputValue, setInputValue] = useState('')
     const [streamingStatus, setStreamingStatus] = useState<StreamingStatus>('idle')
     const [activeTab, setActiveTab] = useState<'preview' | 'terminal' | 'files' | 'ai-status'>('preview')
-    const [aiLogs, setAiLogs] = useState<AICallLog[]>([])
+    const [aiLogs, setAiLogs] = useState<AICallLog[]>(initialAILogs || [])
     const [isEditingName, setIsEditingName] = useState(false)
     const [currentProjectName, setCurrentProjectName] = useState(projectName)
     const [isRenaming, setIsRenaming] = useState(false)
