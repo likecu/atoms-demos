@@ -8,8 +8,8 @@ import { NextResponse, type NextRequest } from 'next/server'
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient(request)
-    
+    const supabase = await createServerSupabaseClient()
+
     const body = await request.json()
     const { name } = body
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
       return NextResponse.json(
         { error: '未登录或登录已过期' },
@@ -131,10 +131,10 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient(request)
-    
+    const supabase = await createServerSupabaseClient()
+
     const { data: { user } } = await supabase.auth.getUser()
-    
+
     if (!user) {
       return NextResponse.json(
         { error: '未登录或登录已过期' },

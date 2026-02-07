@@ -22,45 +22,48 @@ export function parseLogsToAgents(logs: AICallLog[]): AgentNode[] {
                     role: args.role || args.agent_role || 'Assistant',
                     status: 'working', // Default to working when dispatched
                     currentTask: 'Initializing...',
-                    avatar: undefined
+                    avatar: undefined,
+                    logs: [] // 初始化空日志数组
                 });
             }
         }
     });
 
-    // 2. Update Status based on children/subsequent logs
-    // We need to build a hierarchy or just map logs to their parents
-    // Use a map for quick lookup
-    const logMap = new Map(logs.map(l => [l.id, l]));
-    const toolIdToAgentId = new Map(logs.filter(l => l.metadata?.toolCallId).map(l => [l.metadata.toolCallId, l.id])); // Map toolCallId to dispatch log ID ?? No.
-
-    // Better approach:
-    // If a log has a 'parent_log_id' which corresponds to a 'dispatch_subagent' tool call, 
-    // then this log belongs to that agent.
-
-    // Find logs that are children of agents
+    // 2. 将日志关联到对应的 Agent
+    // 规则：如果 log.parent_log_id 等于某个 agent 的 id (toolCallId)，则该日志属于该 agent
     logs.forEach(log => {
-        // If parent is an agent dispatch (we need to track toolCallIds of dispatches)
-        // Actually, log.parent_log_id usually links to the *step* that spawned it.
-        // For sub-agents, the 'dispatch_subagent' tool call has a toolCallId. 
-        // The sub-agent's activities might be linked to that toolCallId?
-        // Or simply checking if the log's parent is the dispatch log.
+        // 跳过 dispatch_subagent 调用本身
+        if (log.step_type === 'tool_call' && log.metadata?.toolName === 'dispatch_subagent') {
+            return;
+        }
 
-        // Simplified Logic for MVP:
-        // We assume flat list of agents for now, or just look for specific patterns.
-        // Let's iterate and see if we can find "results" for the dispatch.
+        // 检查该日志是否属于某个子代理
+        agents.forEach((agent, agentId) => {
+            if (log.parent_log_id === agentId) {
+                // 该日志属于此代理
+                if (!agent.logs) {
+                    agent.logs = [];
+                }
+                agent.logs.push(log);
 
+                // 更新代理的当前任务（使用最新的 thinking 日志）
+                if (log.step_type === 'thinking' && log.content) {
+                    // 截取前100个字符作为当前任务
+                    const taskPreview = log.content.substring(0, 100);
+                    agent.currentTask = taskPreview.length < log.content.length
+                        ? taskPreview + '...'
+                        : taskPreview;
+                }
+            }
+        });
+
+        // 3. 检查 tool_result 来判断代理是否完成
         if (log.step_type === 'tool_result' && agents.has(log.metadata?.toolCallId)) {
-            // This is the result of the dispatch_subagent call -> Agent finished
+            // 这是 dispatch_subagent 的结果 -> Agent 完成
             const agent = agents.get(log.metadata.toolCallId)!;
             agent.status = 'completed';
             agent.currentTask = 'Task completed';
         }
-
-        // How to find "Current Task"?
-        // If we can link a 'thinking' or 'tool_call' step to the agent.
-        // This requires accurate parent-child tracking which might be complex with just the list.
-        // For now, let's just show the agents found.
     });
 
     return Array.from(agents.values());

@@ -12,8 +12,8 @@ export async function GET(
   try {
     const { projectId } = await params
 
-    const supabase = await createServerSupabaseClient(request)
-    
+    const supabase = await createServerSupabaseClient()
+
     // 验证用户登录状态
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {

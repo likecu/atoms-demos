@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from 'next/server'
  * GET /api/auth/me
  */
 export async function GET(request: NextRequest) {
-  const supabase = await createServerSupabaseClient(request)
+  const supabase = await createServerSupabaseClient()
 
   try {
     const { data: { user }, error } = await supabase.auth.getUser()

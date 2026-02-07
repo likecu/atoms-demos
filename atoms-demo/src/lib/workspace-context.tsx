@@ -13,6 +13,7 @@ export interface AgentNode {
     status: 'idle' | 'working' | 'completed' | 'error';
     currentTask?: string;
     avatar?: string;
+    logs?: any[];  // 该代理的所有日志（AICallLog类型，避免循环依赖使用any）
 }
 
 export interface FileNode {

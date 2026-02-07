@@ -15,8 +15,8 @@ export async function GET(
     const { searchParams } = new URL(request.url)
     const subPath = searchParams.get('path') || ''
 
-    const supabase = await createServerSupabaseClient(request)
-    
+    const supabase = await createServerSupabaseClient()
+
     // 验证用户登录状态
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {

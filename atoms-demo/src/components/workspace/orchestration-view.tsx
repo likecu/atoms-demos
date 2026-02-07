@@ -48,6 +48,7 @@ export function OrchestrationView() {
 }
 
 function AgentSwimlane({ agent }: { agent: AgentNode }) {
+    const [isExpanded, setIsExpanded] = React.useState(true);
     const isWorking = agent.status === 'working';
     const isCompleted = agent.status === 'completed';
     const isError = agent.status === 'error';
@@ -100,6 +101,43 @@ function AgentSwimlane({ agent }: { agent: AgentNode }) {
                             </div>
                         </div>
 
+                        {/* Logs Section */}
+                        {agent.logs && agent.logs.length > 0 && (
+                            <div className="bg-zinc-50 rounded-lg border border-zinc-200">
+                                <button
+                                    onClick={() => setIsExpanded(!isExpanded)}
+                                    className="w-full px-3 py-2 flex items-center justify-between text-xs font-semibold text-zinc-700 hover:bg-zinc-100 rounded-t-lg transition-colors"
+                                >
+                                    <span>Logs ({agent.logs.length})</span>
+                                    <motion.div
+                                        animate={{ rotate: isExpanded ? 180 : 0 }}
+                                        transition={{ duration: 0.2 }}
+                                    >
+                                        ▼
+                                    </motion.div>
+                                </button>
+                                <AnimatePresence>
+                                    {isExpanded && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="overflow-hidden"
+                                        >
+                                            <ScrollArea className="max-h-64 px-3 pb-3">
+                                                <div className="space-y-2 pt-2">
+                                                    {agent.logs.map((log: any, idx: number) => (
+                                                        <LogEntry key={log.id || idx} log={log} />
+                                                    ))}
+                                                </div>
+                                            </ScrollArea>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        )}
+
                         {/* Progress Bar (Fake for now, or based on task steps if available) */}
                         {isWorking && (
                             <div className="h-1 w-full bg-zinc-100 rounded-full overflow-hidden">
@@ -115,6 +153,47 @@ function AgentSwimlane({ agent }: { agent: AgentNode }) {
                 </CardContent>
             </Card>
         </motion.div>
+    );
+}
+
+// 新增日志条目组件
+function LogEntry({ log }: { log: any }) {
+    const getLogIcon = () => {
+        switch (log.step_type) {
+            case 'thinking':
+                return <Clock className="w-3.5 h-3.5 text-blue-500" />;
+            case 'tool_call':
+                return <Play className="w-3.5 h-3.5 text-purple-500" />;
+            case 'tool_result':
+                return <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />;
+            default:
+                return <Bot className="w-3.5 h-3.5 text-zinc-400" />;
+        }
+    };
+
+    const getLogTitle = () => {
+        if (log.step_type === 'tool_call' && log.metadata?.toolName) {
+            return `Tool: ${log.metadata.toolName}`;
+        }
+        return log.step_type;
+    };
+
+    return (
+        <div className="bg-white rounded-md p-2 text-xs border border-zinc-200">
+            <div className="flex items-start gap-2">
+                {getLogIcon()}
+                <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-zinc-700 capitalize mb-1">
+                        {getLogTitle()}
+                    </div>
+                    {log.content && (
+                        <div className="text-zinc-600 break-words line-clamp-3">
+                            {log.content}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
     );
 }
 
