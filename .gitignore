@@ -57,6 +57,10 @@ debug_*.py
 *.tmp
 workspaces/
 
+# 测试和调试文件
+reproduce_*.ts
+debug_*.ts
+
 # Docker
 .docker/
 docker-compose.override.yml

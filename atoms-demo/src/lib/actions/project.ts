@@ -206,6 +206,7 @@ export async function updateProjectName(id: string, name: string): Promise<void>
     }
 
     revalidatePath('/dashboard')
+    revalidatePath(`/chat/${id}`)
 }
 
 /**

@@ -1,6 +1,6 @@
 import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
-import { saveMessage } from '@/lib/actions/message';
+import { saveMessage, saveAICallLog } from '@/lib/actions/message';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -62,10 +62,11 @@ export async function POST(req: Request) {
     const convertedMessages = convertPartsToContent(messages) as any;
 
     // Save user's latest message
+    let userMessageId: string | null = null;
     const lastMessage = convertedMessages[convertedMessages.length - 1];
     if (projectId && lastMessage && lastMessage.role === 'user') {
       log('[API] Saving user message');
-      await saveMessage(projectId, 'user', lastMessage.content);
+      userMessageId = await saveMessage(projectId, 'user', lastMessage.content);
     }
 
     // Force model for testing if env not picked up, but try env first
@@ -100,11 +101,55 @@ export async function POST(req: Request) {
         const tools = (await import('./tools')).getTools(projectId || 'default-user');
 
         const result = await generateText({
-          model: openrouter(modelId),
+          model: openrouter(modelId) as any,
           system: systemPrompt,
           messages: convertedMessages,
           tools: tools,
-          maxSteps: 5, // Allow multi-step tool execution
+          maxSteps: 5,
+          onStepFinish: async (step) => {
+            log(`[Background] Step finished: ${step.text ? 'Thinking' : 'Tool execution'}`);
+            if (!projectId) return;
+
+            // 记录思考过程
+            if (step.text) {
+              await saveAICallLog({
+                project_id: projectId,
+                message_id: null,
+                step_type: 'thinking',
+                content: step.text,
+                metadata: {}
+              });
+            }
+
+            // 记录工具调用及其结果
+            if (step.toolCalls && step.toolCalls.length > 0) {
+              for (const call of step.toolCalls as any[]) {
+                // 保存工具调用
+                await saveAICallLog({
+                  project_id: projectId,
+                  message_id: null,
+                  step_type: 'tool_call',
+                  content: `Calling ${call.toolName}`,
+                  metadata: { toolName: call.toolName, args: call.args }
+                });
+
+                // 获取对应的结果 (如果有)
+                const resultObj = step.toolResults?.find((r: any) => r.toolCallId === (call as any).toolCallId) as any;
+                if (resultObj) {
+                  await saveAICallLog({
+                    project_id: projectId,
+                    message_id: null,
+                    step_type: 'tool_result',
+                    content: `Result of ${call.toolName}`,
+                    metadata: {
+                      toolName: call.toolName,
+                      result: typeof resultObj.result === 'string' ? resultObj.result : JSON.stringify(resultObj.result)
+                    }
+                  });
+                }
+              }
+            }
+          }
         });
 
         const text = result.text;
@@ -116,8 +161,15 @@ export async function POST(req: Request) {
 
         if (projectId && text) {
           log('[Background] Saving assistant response');
-          await saveMessage(projectId, 'assistant', text);
-          log('[Background] Response saved successfully');
+          const assistantMsgId = await saveMessage(projectId, 'assistant', text);
+          log(`[Background] Response saved with ID: ${assistantMsgId}`);
+
+          // 关联最后一步的日志到这个消息 ID
+          // 实际上为了简化，我们可以在查询时按照时间顺序拿最新的
+          if (assistantMsgId) {
+            // 可以通过 SQL 更新该 projectId 下 message_id 为空的记录，但在 serverless 逻辑中并发可能复杂
+            // 简单起见，我们先保持 message_id 为空，查询时靠 project_id 和时间戳
+          }
         }
       } catch (err) {
         log(`[Background] Error in AI generation: ${err}`);

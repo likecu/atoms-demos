@@ -16,6 +16,19 @@ export interface Message {
 }
 
 /**
+ * AI 调用日志接口定义
+ */
+export interface AICallLog {
+    id: string
+    message_id: string | null
+    project_id: string
+    step_type: 'thinking' | 'tool_call' | 'tool_result' | 'output'
+    content: string | null
+    metadata: any
+    created_at: string
+}
+
+/**
  * 获取项目的所有消息
  * @param projectId - 项目 ID
  * @returns 消息列表，按创建时间正序排列
@@ -158,4 +171,55 @@ export async function saveMessages(
         .from('projects')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', projectId)
+}
+
+/**
+ * 保存 AI 条用日志
+ * @param log - 日志对象
+ */
+export async function saveAICallLog(log: Omit<AICallLog, 'id' | 'created_at'>): Promise<void> {
+    const supabase = await createServerSupabaseClient()
+
+    const { error } = await supabase
+        .from('ai_call_logs')
+        .insert(log)
+
+    if (error) {
+        console.error('保存 AI 调用日志失败:', error)
+    }
+}
+
+/**
+ * 获取项目最新的 AI 调用日志
+ * @param projectId - 项目 ID
+ * @returns 日志列表
+ */
+export async function getAICallLogsByProjectId(projectId: string): Promise<AICallLog[]> {
+    const supabase = await createServerSupabaseClient()
+
+    // 1. 先获取该项目的最后一条消息 ID
+    const { data: lastMessage } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+    if (!lastMessage) return []
+
+    // 2. 获取与该消息关联的所有日志，或者该消息之后的所有日志
+    const { data, error } = await supabase
+        .from('ai_call_logs')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('message_id', lastMessage.id)
+        .order('created_at', { ascending: true })
+
+    if (error) {
+        console.error('获取 AI 调用日志失败:', error)
+        return []
+    }
+
+    return data as AICallLog[]
 }

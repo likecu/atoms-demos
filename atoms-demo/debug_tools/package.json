@@ -1,0 +1,21 @@
+{
+  "name": "debug-tools",
+  "version": "1.0.0",
+  "description": "AI SDK 工具调用调试工具集",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts",
+    "test": "tsx test-runner.ts",
+    "scenario": "tsx test-single.ts"
+  },
+  "dependencies": {
+    "ai": "^6.0.77",
+    "@ai-sdk/openai": "^3.0.26",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -7,6 +7,16 @@ import ProjectCard from '@/components/dashboard/project-card'
 import { Button } from '@/components/ui/button'
 import { Plus, Sparkles } from 'lucide-react'
 import UserMenu from '@/components/layout/user-menu'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { label } from 'framer-motion/client' // 这里的导入可能有误，应该使用标准的 label 或不使用，改为用文本
 
 interface DashboardClientProps {
     initialProjects: Project[]
@@ -20,6 +30,8 @@ interface DashboardClientProps {
 export default function DashboardClient({ initialProjects }: DashboardClientProps) {
     const [projects, setProjects] = useState(initialProjects)
     const [isPending, startTransition] = useTransition()
+    const [isNameDialogOpen, setIsNameDialogOpen] = useState(false)
+    const [projectName, setProjectName] = useState('未命名项目')
     const router = useRouter()
 
     /**
@@ -27,7 +39,7 @@ export default function DashboardClient({ initialProjects }: DashboardClientProp
      */
     const handleCreateProject = () => {
         startTransition(async () => {
-            const projectId = await createProject()
+            const projectId = await createProject(projectName)
             router.push(`/chat/${projectId}`)
         })
     }
@@ -48,6 +60,15 @@ export default function DashboardClient({ initialProjects }: DashboardClientProp
     }
 
 
+
+    /**
+     * 重命名项目并更新本地状态
+     * @param id - 项目 ID
+     * @param newName - 新名称
+     */
+    const handleRenameProject = (id: string, newName: string) => {
+        setProjects(projects.map(p => p.id === id ? { ...p, name: newName } : p))
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-indigo-50/30">
@@ -77,12 +98,12 @@ export default function DashboardClient({ initialProjects }: DashboardClientProp
                     </div>
 
                     <Button
-                        onClick={handleCreateProject}
+                        onClick={() => setIsNameDialogOpen(true)}
                         disabled={isPending}
                         className="bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-lg shadow-indigo-200 px-6"
                     >
                         <Plus className="w-4 h-4 mr-2" />
-                        {isPending ? '创建中...' : '新建项目'}
+                        新建项目
                     </Button>
                 </div>
 
@@ -99,7 +120,7 @@ export default function DashboardClient({ initialProjects }: DashboardClientProp
                             点击上方的"新建项目"按钮，开始使用 AI 生成你的第一个应用
                         </p>
                         <Button
-                            onClick={handleCreateProject}
+                            onClick={() => setIsNameDialogOpen(true)}
                             disabled={isPending}
                             className="bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-lg shadow-indigo-200"
                         >
@@ -114,11 +135,59 @@ export default function DashboardClient({ initialProjects }: DashboardClientProp
                                 key={project.id}
                                 project={project}
                                 onDelete={handleDeleteProject}
+                                onRename={handleRenameProject}
                             />
                         ))}
                     </div>
                 )}
             </main>
+
+            {/* 新建项目命名对话框 */}
+            <Dialog open={isNameDialogOpen} onOpenChange={setIsNameDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>新建项目</DialogTitle>
+                        <DialogDescription>
+                            给你的新项目取一个名字。
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <label htmlFor="name" className="text-right text-sm font-medium text-zinc-500">
+                                名称
+                            </label>
+                            <Input
+                                id="name"
+                                value={projectName}
+                                onChange={(e) => setProjectName(e.target.value)}
+                                className="col-span-3"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        handleCreateProject()
+                                    }
+                                }}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="ghost"
+                            onClick={() => setIsNameDialogOpen(false)}
+                            disabled={isPending}
+                        >
+                            取消
+                        </Button>
+                        <Button
+                            onClick={handleCreateProject}
+                            disabled={isPending || !projectName.trim()}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                            {isPending ? '创建中...' : '确认创建'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

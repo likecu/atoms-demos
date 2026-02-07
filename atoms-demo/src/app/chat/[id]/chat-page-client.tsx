@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
     ResizableHandle,
     ResizablePanel,
@@ -14,8 +15,8 @@ import { useToast } from '@/components/ui/use-toast'
 import SandpackPreview from '@/components/preview/sandpack-preview'
 import { useAppContext } from '@/lib/context'
 import { useArtifactParser } from '@/lib/use-artifact-parser'
-import { updateProjectCode } from '@/lib/actions/project'
-import { getMessagesByProjectId } from '@/lib/actions/message'
+import { updateProjectCode, updateProjectName } from '@/lib/actions/project'
+import { getMessagesByProjectId, getAICallLogsByProjectId, type AICallLog } from '@/lib/actions/message'
 import {
     PanelLeftClose,
     PanelLeftOpen,
@@ -28,9 +29,13 @@ import {
     TerminalSquare,
     Play,
     Files,
+    Activity,
+    Edit3,
 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { TerminalPanel } from '@/components/sandbox/terminal-panel'
 import { FileExplorer } from '@/components/chat/file-explorer'
+import { AIStatusPanel } from '@/components/chat/ai-status-panel'
 
 /**
  * 消息类型定义
@@ -95,10 +100,15 @@ export default function ChatPageClient({
     const [isMounted, setIsMounted] = useState(false)
     const [inputValue, setInputValue] = useState('')
     const [streamingStatus, setStreamingStatus] = useState<StreamingStatus>('idle')
-    const [activeTab, setActiveTab] = useState<'preview' | 'terminal' | 'files'>('preview')
+    const [activeTab, setActiveTab] = useState<'preview' | 'terminal' | 'files' | 'ai-status'>('preview')
+    const [aiLogs, setAiLogs] = useState<AICallLog[]>([])
+    const [isEditingName, setIsEditingName] = useState(false)
+    const [currentProjectName, setCurrentProjectName] = useState(projectName)
+    const [isRenaming, setIsRenaming] = useState(false)
 
     // Maintain messages state locally
     const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || [])
+    const router = useRouter()
 
     useEffect(() => {
         console.log('[ChatPageClient] Mounted with props:', { projectId, projectName, initialCodeLength: initialCode?.length, initialMessagesCount: initialMessages?.length })
@@ -139,22 +149,27 @@ export default function ChatPageClient({
         }
     }, [parseAndSet, setCode, projectId])
 
-    // Polling logic
+    // Polling logic for messages AND AI logs
     useEffect(() => {
         let intervalId: NodeJS.Timeout;
 
         if (streamingStatus === 'processing') {
             intervalId = setInterval(async () => {
                 try {
-                    console.log('[Polling] Checking for new messages...');
+                    // Poll messages
+                    console.log('[Polling] Checking for new messages and AI logs...');
                     const serverMessages = await getMessagesByProjectId(projectId);
+
+                    // Poll AI Logs (only when processing)
+                    const logs = await getAICallLogsByProjectId(projectId);
+                    if (logs.length !== aiLogs.length) {
+                        setAiLogs(logs);
+                    }
 
                     if (serverMessages.length > messages.length) {
                         const newMessages = serverMessages.slice(messages.length);
                         const lastMessage = newMessages[newMessages.length - 1];
 
-                        // Update local messages state
-                        // We need to map server messages to ChatMessage type if they match
                         const mappedServerMessages = serverMessages.map((msg: any) => ({
                             id: msg.id,
                             role: msg.role,
@@ -164,7 +179,6 @@ export default function ChatPageClient({
 
                         setMessages(mappedServerMessages);
 
-                        // If the last message is from assistant, we assume completion
                         if (lastMessage && lastMessage.role === 'assistant') {
                             console.log('[Polling] Received assistant response');
                             setStreamingStatus('ready');
@@ -173,15 +187,15 @@ export default function ChatPageClient({
                         }
                     }
                 } catch (error) {
-                    console.error('[Polling] Error fetching messages:', error);
+                    console.error('[Polling] Error fetching data:', error);
                 }
-            }, 2000); // Poll every 2 seconds
+            }, 2000);
         }
 
         return () => {
             if (intervalId) clearInterval(intervalId);
         };
-    }, [streamingStatus, projectId, messages.length, handleAIResponse]);
+    }, [streamingStatus, projectId, messages.length, aiLogs.length, handleAIResponse]);
 
 
     // 自动滚动到底部
@@ -256,6 +270,31 @@ export default function ChatPageClient({
         }
     }
 
+    /**
+     * 处理项目重命名
+     */
+    const handleRename = async () => {
+        if (!currentProjectName.trim() || currentProjectName === projectName) {
+            setIsEditingName(false)
+            setCurrentProjectName(projectName)
+            return
+        }
+
+        setIsRenaming(true)
+        try {
+            await updateProjectName(projectId, currentProjectName.trim())
+            setIsEditingName(false)
+            router.refresh()
+            toast.success('项目重命名成功')
+        } catch (error) {
+            console.error('重命名失败:', error)
+            toast.error('重命名失败')
+            setCurrentProjectName(projectName)
+        } finally {
+            setIsRenaming(false)
+        }
+    }
+
     // 加载状态
     const isLoading = streamingStatus !== 'idle' && streamingStatus !== 'ready' && streamingStatus !== 'error'
 
@@ -279,10 +318,36 @@ export default function ChatPageClient({
                     </Button>
                 </Link>
 
-                <div className="flex-1 text-center">
-                    <h1 className="font-semibold text-zinc-900 truncate max-w-md mx-auto">
-                        {projectName}
-                    </h1>
+                <div className="flex-1 flex justify-center items-center">
+                    {isEditingName ? (
+                        <div className="flex items-center gap-2 max-w-md w-full">
+                            <Input
+                                value={currentProjectName}
+                                onChange={(e) => setCurrentProjectName(e.target.value)}
+                                onBlur={handleRename}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleRename()
+                                    if (e.key === 'Escape') {
+                                        setIsEditingName(false)
+                                        setCurrentProjectName(projectName)
+                                    }
+                                }}
+                                autoFocus
+                                className="h-8 text-center font-semibold"
+                                disabled={isRenaming}
+                            />
+                        </div>
+                    ) : (
+                        <div
+                            className="group flex items-center gap-2 cursor-pointer hover:bg-zinc-100 px-3 py-1 rounded-lg transition-colors"
+                            onClick={() => setIsEditingName(true)}
+                        >
+                            <h1 className="font-semibold text-zinc-900 truncate max-w-md">
+                                {currentProjectName}
+                            </h1>
+                            <Edit3 className="w-3 h-3 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                    )}
                 </div>
 
                 {/* 用户菜单 */}
@@ -452,6 +517,17 @@ export default function ChatPageClient({
                                     <Files className="w-3 h-3" />
                                     <span>文件</span>
                                 </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setActiveTab('ai-status')}
+                                    className={`h-8 gap-2 ${activeTab === 'ai-status'
+                                        ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
+                                >
+                                    <Activity className="w-3 h-3" />
+                                    <span>AI 状态</span>
+                                </Button>
                             </div>
 
                             {/* 内容区域 */}
@@ -467,6 +543,11 @@ export default function ChatPageClient({
                                 {activeTab === 'files' && (
                                     <div className="absolute inset-0 z-10 bg-zinc-50">
                                         <FileExplorer projectId={projectId} />
+                                    </div>
+                                )}
+                                {activeTab === 'ai-status' && (
+                                    <div className="absolute inset-0 z-10 bg-zinc-950">
+                                        <AIStatusPanel logs={aiLogs} />
                                     </div>
                                 )}
                             </div>

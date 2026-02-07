@@ -1,15 +1,26 @@
 'use client'
 
-import { Project } from '@/lib/actions/project'
+import { Project, updateProjectName } from '@/lib/actions/project'
 import { formatDistanceToNow } from '@/lib/date-utils'
 import { FolderOpen, MoreVertical, Trash2, Edit2 } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { useToast } from '@/components/ui/use-toast'
 
 interface ProjectCardProps {
     project: Project
     onDelete?: (id: string) => void
+    onRename?: (id: string, name: string) => void
 }
 
 /**
@@ -17,9 +28,15 @@ interface ProjectCardProps {
  * 显示项目名称、状态、更新时间，点击进入聊天页面
  * @param project - 项目数据
  * @param onDelete - 删除回调函数
+ * @param onRename - 重命名回调函数
  */
-export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
+export default function ProjectCard({ project, onDelete, onRename }: ProjectCardProps) {
     const [showMenu, setShowMenu] = useState(false)
+    const [showRenameDialog, setShowRenameDialog] = useState(false)
+    const [newName, setNewName] = useState(project.name)
+    const [isPending, startTransition] = useTransition()
+    const { toast } = useToast()
+    const router = useRouter()
 
     const statusColors = {
         draft: 'bg-amber-100 text-amber-700',
@@ -31,6 +48,26 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
         draft: '草稿',
         generating: '生成中',
         published: '已发布',
+    }
+
+    /**
+     * 处理重命名逻辑
+     */
+    const handleRename = () => {
+        if (!newName.trim() || newName === project.name) return
+
+        startTransition(async () => {
+            try {
+                await updateProjectName(project.id, newName.trim())
+                onRename?.(project.id, newName.trim())
+                router.refresh()
+                setShowRenameDialog(false)
+                toast.success('项目重命名成功')
+            } catch (error) {
+                console.error('重命名失败:', error)
+                toast.error('重命名失败，请稍后重试')
+            }
+        })
     }
 
     return (
@@ -75,7 +112,7 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
                                         className="w-full px-3 py-2 text-sm text-left hover:bg-zinc-50 flex items-center gap-2"
                                         onClick={() => {
                                             setShowMenu(false)
-                                            // TODO: 实现编辑功能
+                                            setShowRenameDialog(true)
                                         }}
                                     >
                                         <Edit2 className="w-4 h-4" />
@@ -114,6 +151,39 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
                     </span>
                 </div>
             </div>
+
+            {/* 重命名对话框 */}
+            <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>重命名项目</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            placeholder="请输入新项目名称"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleRename()
+                                }
+                            }}
+                            autoFocus
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
+                            取消
+                        </Button>
+                        <Button
+                            onClick={handleRename}
+                            disabled={isPending || !newName.trim() || newName === project.name}
+                        >
+                            {isPending ? '保存中...' : '确定'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
