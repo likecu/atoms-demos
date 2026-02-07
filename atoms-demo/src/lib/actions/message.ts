@@ -197,11 +197,12 @@ export async function saveAICallLog(log: Omit<AICallLog, 'id' | 'created_at'>): 
 export async function getAICallLogsByProjectId(projectId: string): Promise<AICallLog[]> {
     const supabase = await createServerSupabaseClient()
 
-    // 1. 先获取该项目的最后一条消息 ID
+    // 1. 先获取该项目的最后一条用户消息 ID
     const { data: lastMessage } = await supabase
         .from('messages')
         .select('id')
         .eq('project_id', projectId)
+        .eq('role', 'user')
         .order('created_at', { ascending: false })
         .limit(1)
         .single()

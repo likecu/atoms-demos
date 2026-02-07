@@ -4,24 +4,26 @@ import { SandboxManager } from '../sandbox/manager';
 import { getCurrentUserId } from '../supabase-server';
 
 /**
- * Execute a shell command in the user's sandbox
+ * Execute a shell command in the project's sandbox
  */
-export async function execSandboxCommand(command: string) {
+export async function execSandboxCommand(projectId: string, command: string) {
     const userId = await getCurrentUserId();
     if (!userId) {
         throw new Error('Unauthorized');
     }
 
+    // TODO: verify user has access to project
+
     const manager = SandboxManager.getInstance();
-    // Provide basic safety: ensure container exists
-    await manager.getOrCreateSandbox(userId);
+    // Provide basic safety: ensure container exists for this project
+    await manager.getOrCreateSandbox(projectId);
 
     // Split command string into array for better safety if possible, 
     // but for a shell, we often want to run "sh -c 'full command'"
     const cmdArray = ['/bin/sh', '-c', command];
 
     try {
-        const result = await manager.execCommand(userId, cmdArray);
+        const result = await manager.execCommand(projectId, cmdArray);
         return result;
     } catch (error) {
         console.error('Sandbox execution error:', error);
@@ -30,9 +32,9 @@ export async function execSandboxCommand(command: string) {
 }
 
 /**
- * List files in the user's workspace
+ * List files in the project's workspace
  */
-export async function listWorkspaceFiles(subPath: string = '') {
+export async function listWorkspaceFiles(projectId: string, subPath: string = '') {
     const userId = await getCurrentUserId();
     if (!userId) {
         throw new Error('Unauthorized');
@@ -45,7 +47,7 @@ export async function listWorkspaceFiles(subPath: string = '') {
 
     const manager = SandboxManager.getInstance();
     // Ensure init
-    await manager.initWorkspace(userId);
+    await manager.initWorkspace(projectId);
 
-    return await manager.listFiles(userId, subPath);
+    return await manager.listFiles(projectId, subPath);
 }

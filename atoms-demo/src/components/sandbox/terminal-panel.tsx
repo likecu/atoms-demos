@@ -67,6 +67,11 @@ export function TerminalPanel({ className, projectId, logs = [] }: TerminalPanel
         e?.preventDefault();
         if (!input.trim() || loading) return;
 
+        if (!projectId) {
+            setHistory(prev => [...prev, { cmd: 'Error', output: 'Project ID not found. Cannot connect to sandbox.', error: true, source: 'user' }]);
+            return;
+        }
+
         const command = input.trim();
         setLoading(true);
         setInput(''); // Clear input immediately
@@ -75,7 +80,7 @@ export function TerminalPanel({ className, projectId, logs = [] }: TerminalPanel
         setHistory(prev => [...prev, { cmd: command, output: 'Running...', error: false, source: 'user' }]);
 
         try {
-            const result = await execSandboxCommand(command);
+            const result = await execSandboxCommand(projectId, command);
 
             setHistory(prev => {
                 const newHistory = [...prev];
