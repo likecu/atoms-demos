@@ -60,14 +60,13 @@ docker push your-registry/atoms-demo:latest
 ```
 
 ### 2. 在远程服务器部署
-
 ```bash
 # SSH 连接
-ssh -i ~/.ssh/milk milk@34.72.125.220
+ssh your-server
 
 # 创建部署目录
-mkdir -p /home/milk/atoms-demo
-cd /home/milk/atoms-demo
+mkdir -p /path/to/atoms-demo
+cd /path/to/atoms-demo
 
 # 拉取代码或镜像
 git pull origin main  # 或从镜像仓库拉取
