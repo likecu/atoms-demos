@@ -110,9 +110,7 @@ export default function ChatPageClient({
     const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || [])
     const router = useRouter()
 
-    useEffect(() => {
-        console.log('[ChatPageClient] Mounted with props:', { projectId, projectName, initialCodeLength: initialCode?.length, initialMessagesCount: initialMessages?.length })
-    }, [projectId, projectName, initialCode, initialMessages])
+
 
     const { setCode } = useAppContext()
     const { parseAndSet } = useArtifactParser()
@@ -181,9 +179,18 @@ export default function ChatPageClient({
 
                         if (lastMessage && lastMessage.role === 'assistant') {
                             console.log('[Polling] Received assistant response');
+
+                            // 确保获取最后且完整的 logs
+                            const finalLogs = await getAICallLogsByProjectId(projectId);
+                            setAiLogs(finalLogs);
+
                             setStreamingStatus('ready');
                             handleAIResponse(lastMessage.content);
                             setTimeout(() => setStreamingStatus('idle'), 1500);
+                        } else if (lastMessage && lastMessage.role === 'system') {
+                            console.log('[Polling] Received system error message');
+                            setStreamingStatus('error');
+                            setTimeout(() => setStreamingStatus('idle'), 3000);
                         }
                     }
                 } catch (error) {

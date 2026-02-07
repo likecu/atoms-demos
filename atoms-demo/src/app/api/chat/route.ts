@@ -1,6 +1,7 @@
-import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
+import { generateText, stepCountIs } from 'ai';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { saveMessage, saveAICallLog } from '@/lib/actions/message';
+import { getTools } from './tools';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -12,138 +13,141 @@ function log(message: string) {
 }
 
 /**
- * Configure OpenRouter as OpenAI-compatible provider
+ * 创建 OpenRouter Provider
+ * 使用官方 @openrouter/ai-sdk-provider 包
  */
-const openrouter = createOpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY || '',
 });
 
 /**
- * Convert AI SDK parts format to legacy content format
- * Solves compatibility issues with OpenRouter/Google Gemini backend
- */
-function convertPartsToContent(messages: Array<{
-  role: string;
-  parts?: Array<{ type: string; text?: string }>;
-  content?: string;
-}>): Array<{ role: string; content: string }> {
-  return messages.map(msg => {
-    if (msg.parts && Array.isArray(msg.parts)) {
-      const textContent = msg.parts
-        .filter(part => part.type === 'text' && part.text)
-        .map(part => part.text!)
-        .join('\n');
-
-      return {
-        role: msg.role,
-        content: textContent || msg.content || ''
-      };
-    }
-
-    return {
-      role: msg.role,
-      content: msg.content || ''
-    };
-  });
-}
-
-/**
- * POST /api/chat - Handle chat requests
- * Receives user message and triggers background AI processing via OpenRouter
+ * POST /api/chat - 处理聊天请求
+ * 支持多步工具调用和实时进度追踪
  */
 export async function POST(req: Request) {
   log('[API] Chat request received');
+
   try {
     const body = await req.json();
     const { messages, projectId } = body;
-    log(`[API] Messages received: ${messages.length}, Project ID: ${projectId}`);
 
-    const convertedMessages = convertPartsToContent(messages) as any;
+    log(`[API] Messages: ${messages.length}, Project: ${projectId}`);
 
-    // Save user's latest message
+    // 保存用户消息
     let userMessageId: string | null = null;
-    const lastMessage = convertedMessages[convertedMessages.length - 1];
+    const lastMessage = messages[messages.length - 1];
+
     if (projectId && lastMessage && lastMessage.role === 'user') {
       log('[API] Saving user message');
-      userMessageId = await saveMessage(projectId, 'user', lastMessage.content);
+      const content = typeof lastMessage.content === 'string'
+        ? lastMessage.content
+        : JSON.stringify(lastMessage.content);
+      userMessageId = await saveMessage(projectId, 'user', content);
     }
 
-    // Force model for testing if env not picked up, but try env first
-    // Defaulting to Gemini 2.0 Flash Lite for better tool support
-    const modelId = process.env.GEMINI_MODEL_ID || 'meta-llama/llama-3.3-70b-instruct:free';
-    log(`[API] Triggering background process with model: ${modelId}`);
+    // 使用经过验证的模型
+    const modelId = process.env.GEMINI_MODEL_ID || 'arcee-ai/trinity-large-preview:free';
+    log(`[API] Using model: ${modelId}`);
 
-    // Trigger background processing without awaiting
+    // 触发后台处理
     (async () => {
       try {
-        log('[Background] Starting AI generation...');
+        log('[Background] Starting AI generation with multi-step tools...');
 
-        // Define system prompt with tool capabilities
-        const systemPrompt = `You are an expert web developer for Atoms Demo. 
-            Your goal is to help users build React components or execute commands.
-            Always respond with high-quality React code inside markdown code blocks.
-            The code will be rendered in a Sandpack preview.
-            Use Tailwind CSS for styling.
-            
-            You have access to a secure sandbox environment via tools:
-            - executeBash: Run shell commands (e.g. ls, npm install, python scripts)
-            - readFile: Read file contents
-            - writeFile: Create/Update files
-            - listFiles: List directory contents
-            
-            When managing files or running commands, use the provided tools.
-            When providing code, always wrap it in a single code block with the appropriate language tag (jsx, tsx, or js).
-            Do not include multiple code blocks for the same component.`;
+        const systemPrompt = `You are an expert web developer assistant for Atoms Demo.
+Your goal is to help users build React components and manage their development environment.
 
-        // Get tools for this project context
-        // Ensure projectId is valid string, fallback to default if missing
-        const tools = (await import('./tools')).getTools(projectId || 'default-user');
+You have access to a secure sandbox environment with the following tools:
+- executeBash: Execute shell commands (ls, npm, python, etc.)
+- readFile: Read file contents from the filesystem
+- writeFile: Create or update files
+- listFiles: List directory contents
 
+When the user asks to:
+1. Run commands → Use executeBash
+2. Check file contents → Use readFile
+3. Create/modify files → Use writeFile
+4. Browse files → Use listFiles
+
+Always use tools when appropriate. Provide clear explanations of what you're doing.
+For code, wrap it in markdown code blocks with the appropriate language tag.`;
+
+        // 获取项目的工具实例
+        const tools = getTools(projectId || 'default-user');
+        log(`[Background] Tools initialized: ${Object.keys(tools).join(', ')}`);
+
+        // 步骤计数器
+        let stepCounter = 0;
+
+        // 使用 generateText 进行多步工具调用
         const result = await generateText({
-          model: openrouter(modelId) as any,
+          model: openrouter(modelId),
           system: systemPrompt,
-          messages: convertedMessages,
+          messages: messages,
           tools: tools,
-          maxSteps: 5,
-          onStepFinish: async (step) => {
-            log(`[Background] Step finished: ${step.text ? 'Thinking' : 'Tool execution'}`);
+
+          // 允许最多 5 步执行 (防止无限循环)
+          stopWhen: stepCountIs(5),
+
+          // 每步完成时的回调
+          onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {
+            stepCounter++;
+            const stepNum = stepCounter;
+
+            log(`[Step ${stepNum}] Finished - Reason: ${finishReason}`);
+            log(`[Step ${stepNum}] Text: ${text?.substring(0, 100) || 'none'}...`);
+            log(`[Step ${stepNum}] Tool Calls: ${toolCalls?.length || 0}`);
+            log(`[Step ${stepNum}] Usage: ${JSON.stringify(usage)}`);
+
             if (!projectId) return;
 
-            // 记录思考过程
-            if (step.text) {
+            // 记录思考文本
+            if (text) {
               await saveAICallLog({
                 project_id: projectId,
-                message_id: null,
+                message_id: userMessageId,
                 step_type: 'thinking',
-                content: step.text,
-                metadata: {}
+                content: text,
+                metadata: {
+                  stepNumber: stepNum,
+                  finishReason,
+                  usage
+                }
               });
             }
 
-            // 记录工具调用及其结果
-            if (step.toolCalls && step.toolCalls.length > 0) {
-              for (const call of step.toolCalls as any[]) {
-                // 保存工具调用
+            // 记录工具调用
+            if (toolCalls && toolCalls.length > 0) {
+              for (let i = 0; i < toolCalls.length; i++) {
+                const call = toolCalls[i];
+                const toolResult = toolResults?.[i];
+
+                // 保存工具调用信息
                 await saveAICallLog({
                   project_id: projectId,
-                  message_id: null,
+                  message_id: userMessageId,
                   step_type: 'tool_call',
                   content: `Calling ${call.toolName}`,
-                  metadata: { toolName: call.toolName, args: call.args }
+                  metadata: {
+                    stepNumber: stepNum,
+                    toolName: call.toolName,
+                    toolCallId: call.toolCallId,
+                    args: (call as any).input
+                  }
                 });
 
-                // 获取对应的结果 (如果有)
-                const resultObj = step.toolResults?.find((r: any) => r.toolCallId === (call as any).toolCallId) as any;
-                if (resultObj) {
+                // 保存工具结果
+                if (toolResult) {
                   await saveAICallLog({
                     project_id: projectId,
-                    message_id: null,
+                    message_id: userMessageId,
                     step_type: 'tool_result',
-                    content: `Result of ${call.toolName}`,
+                    content: JSON.stringify((toolResult as any).output).substring(0, 500),
                     metadata: {
+                      stepNumber: stepNum,
                       toolName: call.toolName,
-                      result: typeof resultObj.result === 'string' ? resultObj.result : JSON.stringify(resultObj.result)
+                      toolCallId: (toolResult as any).toolCallId,
+                      fullResult: (toolResult as any).output
                     }
                   });
                 }
@@ -152,42 +156,73 @@ export async function POST(req: Request) {
           }
         });
 
-        const text = result.text;
+        log('[Background] Generation complete');
+        log(`[Background] Total steps: ${result.steps.length}`);
+        log(`[Background] Final text length: ${result.text.length}`);
+        log(`[Background] Total token usage: ${JSON.stringify(result.usage)}`);
 
-        if (result.toolCalls && result.toolCalls.length > 0) {
-          log(`[Background] Model used ${result.toolCalls.length} tool calls.`);
-          result.toolCalls.forEach(tc => log(`[Background] Tool Call: ${tc.toolName} args=${JSON.stringify(tc.args)}`));
+        // 保存 AI 的最终回复
+        if (projectId && result.text) {
+          await saveMessage(projectId, 'assistant', result.text);
+          log('[Background] AI message saved to database');
         }
 
-        if (projectId && text) {
-          log('[Background] Saving assistant response');
-          const assistantMsgId = await saveMessage(projectId, 'assistant', text);
-          log(`[Background] Response saved with ID: ${assistantMsgId}`);
-
-          // 关联最后一步的日志到这个消息 ID
-          // 实际上为了简化，我们可以在查询时按照时间顺序拿最新的
-          if (assistantMsgId) {
-            // 可以通过 SQL 更新该 projectId 下 message_id 为空的记录，但在 serverless 逻辑中并发可能复杂
-            // 简单起见，我们先保持 message_id 为空，查询时靠 project_id 和时间戳
-          }
-        }
-      } catch (err) {
-        log(`[Background] Error in AI generation: ${err}`);
+        // 记录完成状态
         if (projectId) {
-          // Save error message carefully
-          await saveMessage(projectId, 'system', 'Sorry, I encountered an error while processing your request: ' + (err instanceof Error ? err.message : String(err)));
+          await saveAICallLog({
+            project_id: projectId,
+            message_id: userMessageId,
+            step_type: 'output' as any,
+            content: result.text,
+            metadata: {
+              totalSteps: result.steps.length,
+              totalUsage: result.usage,
+              finishReason: result.finishReason
+            }
+          });
+        }
+
+      } catch (error: any) {
+        log(`[Background] ERROR: ${error.message}`);
+        log(`[Background] Stack: ${error.stack}`);
+
+        // 记录错误
+        if (projectId) {
+          await saveAICallLog({
+            project_id: projectId,
+            message_id: userMessageId,
+            step_type: 'error' as any,
+            content: error.message,
+            metadata: {
+              stack: error.stack
+            }
+          });
         }
       }
     })();
 
-    log('[API] Request accepted, returning immediately');
-    return new Response(JSON.stringify({ status: 'processing', projectId }), {
-      status: 202,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    // 立即返回 202 Accepted
+    log('[API] Returning 202 Accepted');
+    return new Response(
+      JSON.stringify({
+        status: 'accepted',
+        message: 'AI generation started',
+        userMessageId
+      }),
+      {
+        status: 202,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
 
-  } catch (error) {
-    log(`[API] Error in chat route: ${error}`);
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
+  } catch (error: any) {
+    log(`[API] ERROR: ${error.message}`);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
 }
