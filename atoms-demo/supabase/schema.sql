@@ -65,6 +65,17 @@ CREATE TABLE IF NOT EXISTS artifacts (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 6. AI Call Logs 表 - AI 调用过程记录
+CREATE TABLE IF NOT EXISTS ai_call_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    step_type TEXT NOT NULL CHECK (step_type IN ('thinking', 'tool_call', 'tool_result', 'output')),
+    content TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 索引优化
 CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
@@ -72,6 +83,8 @@ CREATE INDEX IF NOT EXISTS idx_deployments_project_id ON deployments(project_id)
 CREATE INDEX IF NOT EXISTS idx_deployments_share_token ON deployments(share_token);
 CREATE INDEX IF NOT EXISTS idx_messages_project_id ON messages(project_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_project_id ON artifacts(project_id);
+CREATE INDEX IF NOT EXISTS idx_ai_call_logs_project_id ON ai_call_logs(project_id);
+CREATE INDEX IF NOT EXISTS idx_ai_call_logs_message_id ON ai_call_logs(message_id);
 
 -- 更新时间戳的触发器函数
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -156,6 +169,20 @@ CREATE POLICY "Users can update own artifacts" ON artifacts FOR UPDATE USING (
 );
 CREATE POLICY "Users can delete own artifacts" ON artifacts FOR DELETE USING (
     EXISTS (SELECT 1 FROM projects WHERE id = artifacts.project_id AND user_id = auth.uid())
+);
+
+-- AI Call Logs 表 RLS 策略
+CREATE POLICY "Users can view own ai_call_logs" ON ai_call_logs FOR SELECT USING (
+    EXISTS (SELECT 1 FROM projects WHERE id = ai_call_logs.project_id AND user_id = auth.uid())
+);
+CREATE POLICY "Users can insert own ai_call_logs" ON ai_call_logs FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM projects WHERE id = ai_call_logs.project_id AND user_id = auth.uid())
+);
+CREATE POLICY "Users can update own ai_call_logs" ON ai_call_logs FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM projects WHERE id = ai_call_logs.project_id AND user_id = auth.uid())
+);
+CREATE POLICY "Users can delete own ai_call_logs" ON ai_call_logs FOR DELETE USING (
+    EXISTS (SELECT 1 FROM projects WHERE id = ai_call_logs.project_id AND user_id = auth.uid())
 );
 
 -- ============================================================
