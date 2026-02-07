@@ -60,6 +60,19 @@ test_*.py
 *_test.py
 verify_*.py
 debug_*.ts
+analyze-*.ts
+tool-validation-test.ts
+validate-tools-fix.ts
+
+# Test logs
+test_logs/
+
+# Scripts (temporary tools)
+scripts/*.ts
+!scripts/typecheck.sh
+
+# Migrations (temp)
+supabase/migrations/
 
 # Temporary files
 workspaces/
