@@ -27,8 +27,10 @@ import {
     Sparkles,
     TerminalSquare,
     Play,
+    Files,
 } from 'lucide-react'
 import { TerminalPanel } from '@/components/sandbox/terminal-panel'
+import { FileExplorer } from '@/components/chat/file-explorer'
 
 /**
  * 消息类型定义
@@ -93,7 +95,7 @@ export default function ChatPageClient({
     const [isMounted, setIsMounted] = useState(false)
     const [inputValue, setInputValue] = useState('')
     const [streamingStatus, setStreamingStatus] = useState<StreamingStatus>('idle')
-    const [activeTab, setActiveTab] = useState<'preview' | 'terminal'>('preview')
+    const [activeTab, setActiveTab] = useState<'preview' | 'terminal' | 'files'>('preview')
 
     // Maintain messages state locally
     const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || [])
@@ -439,6 +441,17 @@ export default function ChatPageClient({
                                     <TerminalSquare className="w-3 h-3" />
                                     <span>终端</span>
                                 </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setActiveTab('files')}
+                                    className={`h-8 gap-2 ${activeTab === 'files'
+                                        ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
+                                >
+                                    <Files className="w-3 h-3" />
+                                    <span>文件</span>
+                                </Button>
                             </div>
 
                             {/* 内容区域 */}
@@ -449,6 +462,11 @@ export default function ChatPageClient({
                                 {activeTab === 'terminal' && (
                                     <div className="absolute inset-0 z-10 bg-black">
                                         <TerminalPanel projectId={projectId} className="h-full border-none rounded-none" />
+                                    </div>
+                                )}
+                                {activeTab === 'files' && (
+                                    <div className="absolute inset-0 z-10 bg-zinc-50">
+                                        <FileExplorer projectId={projectId} />
                                     </div>
                                 )}
                             </div>

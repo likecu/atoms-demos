@@ -27,10 +27,15 @@ export class SandboxManager {
         try {
             await fs.mkdir(workspacePath, { recursive: true });
             // Create a default readme
-            await fs.writeFile(
-                path.join(workspacePath, 'README.md'),
-                `# Workspace for User ${userId}\n\nThis is your private sandbox environment.`
-            );
+            const readmePath = path.join(workspacePath, 'README.md');
+            try {
+                await fs.access(readmePath);
+            } catch {
+                await fs.writeFile(
+                    readmePath,
+                    `# Workspace for User ${userId}\n\nThis is your private sandbox environment.`
+                );
+            }
             return workspacePath;
         } catch (error) {
             console.error(`Failed to init workspace for ${userId}:`, error);
@@ -147,6 +152,23 @@ export class SandboxManager {
             return await fs.readdir(workspacePath);
         } catch (e) {
             return [];
+        }
+    }
+
+    /**
+     * List files with detailed stats (name, isDirectory)
+     */
+    async listFilesDetailed(userId: string, subPath: string = ''): Promise<{ name: string; isDirectory: boolean }[]> {
+        const workspacePath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId, subPath);
+        try {
+            const entries = await fs.readdir(workspacePath, { withFileTypes: true });
+            return entries.map(entry => ({
+                name: entry.name,
+                isDirectory: entry.isDirectory()
+            }));
+        } catch (e) {
+            console.error(`Failed to list files detailed for ${userId}:`, e);
+            throw e;
         }
     }
 }
