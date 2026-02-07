@@ -9,14 +9,49 @@ const docker = new Docker();
 
 export class SandboxManager {
     private static instance: SandboxManager;
+    private lastActivity: Map<string, number> = new Map();
+    private cleanupInterval: NodeJS.Timeout | null = null;
 
-    private constructor() { }
+    // 2 hours in ms
+    private readonly IDLE_TIMEOUT = 2 * 60 * 60 * 1000;
+    // Check every 5 minutes
+    private readonly CHECK_INTERVAL = 5 * 60 * 1000;
+
+    private constructor() {
+        this.startCleanupInterval();
+    }
 
     public static getInstance(): SandboxManager {
         if (!SandboxManager.instance) {
             SandboxManager.instance = new SandboxManager();
         }
         return SandboxManager.instance;
+    }
+
+    private startCleanupInterval() {
+        if (this.cleanupInterval) return;
+
+        this.cleanupInterval = setInterval(async () => {
+            const now = Date.now();
+            for (const [userId, lastActive] of this.lastActivity.entries()) {
+                if (now - lastActive > this.IDLE_TIMEOUT) {
+                    console.log(`[Sandbox] User ${userId} sandbox idle for > 2h, stopping...`);
+                    try {
+                        await this.stopSandbox(userId);
+                        this.lastActivity.delete(userId);
+                    } catch (e) {
+                        console.error(`[Sandbox] Failed to stop idle sandbox for ${userId}:`, e);
+                    }
+                }
+            }
+        }, this.CHECK_INTERVAL);
+
+        // Unref to not hold the process if it wants to exit (though for a server it doesn't matter much)
+        this.cleanupInterval.unref();
+    }
+
+    private updateActivity(userId: string) {
+        this.lastActivity.set(userId, Date.now());
     }
 
     /**
@@ -44,9 +79,34 @@ export class SandboxManager {
     }
 
     /**
+     * Stop and remove a user's sandbox container
+     */
+    async stopSandbox(userId: string): Promise<void> {
+        const containerName = `sandbox-${userId}`;
+        const containers = await docker.listContainers({
+            all: true,
+            filters: { name: [containerName] },
+        });
+
+        if (containers.length > 0) {
+            const container = docker.getContainer(containers[0].Id);
+            const info = await container.inspect();
+
+            if (info.State.Running) {
+                await container.stop();
+            }
+            // We can remove it to save resources, or just stop it. 
+            // Removing ensures a clean slate next time and frees up name.
+            await container.remove();
+            console.log(`[Sandbox] Stopped and removed sandbox for ${userId}`);
+        }
+    }
+
+    /**
      * Get or create a sandbox container for the user
      */
     async getOrCreateSandbox(userId: string): Promise<Docker.Container> {
+        this.updateActivity(userId);
         const containerName = `sandbox-${userId}`;
         const workspacePath = await this.initWorkspace(userId);
 
@@ -90,6 +150,7 @@ export class SandboxManager {
      * Execute a command in the user's sandbox
      */
     async execCommand(userId: string, command: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+        this.updateActivity(userId);
         const container = await this.getOrCreateSandbox(userId);
 
         const exec = await container.exec({
@@ -107,13 +168,29 @@ export class SandboxManager {
 
             // Use the container's modem to demux the stream
             // We cast to any because modem is not exposed in the TypeScript definition
+            const MAX_OUTPUT_SIZE = 1024 * 1024; // 1MB limit
+
             (container as any).modem.demuxStream(stream, {
                 write: (chunk: Buffer) => {
-                    stdout += chunk.toString('utf-8');
+                    if (stdout.length < MAX_OUTPUT_SIZE) {
+                        const chunkStr = chunk.toString('utf-8');
+                        if (stdout.length + chunkStr.length > MAX_OUTPUT_SIZE) {
+                            stdout += chunkStr.slice(0, MAX_OUTPUT_SIZE - stdout.length) + '\n[... Output truncated due to size limit ...]';
+                        } else {
+                            stdout += chunkStr;
+                        }
+                    }
                 }
             }, {
                 write: (chunk: Buffer) => {
-                    stderr += chunk.toString('utf-8');
+                    if (stderr.length < MAX_OUTPUT_SIZE) {
+                        const chunkStr = chunk.toString('utf-8');
+                        if (stderr.length + chunkStr.length > MAX_OUTPUT_SIZE) {
+                            stderr += chunkStr.slice(0, MAX_OUTPUT_SIZE - stderr.length) + '\n[... Output truncated due to size limit ...]';
+                        } else {
+                            stderr += chunkStr;
+                        }
+                    }
                 }
             });
 
@@ -147,6 +224,7 @@ export class SandboxManager {
      * Listing files in the user's workspace (Host side optimization)
      */
     async listFiles(userId: string, subPath: string = ''): Promise<string[]> {
+        this.updateActivity(userId);
         const workspacePath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId, subPath);
         try {
             return await fs.readdir(workspacePath);
@@ -159,6 +237,7 @@ export class SandboxManager {
      * List files with detailed stats (name, isDirectory)
      */
     async listFilesDetailed(userId: string, subPath: string = ''): Promise<{ name: string; isDirectory: boolean }[]> {
+        this.updateActivity(userId);
         const workspacePath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId, subPath);
         try {
             const entries = await fs.readdir(workspacePath, { withFileTypes: true });
@@ -176,6 +255,7 @@ export class SandboxManager {
      * Read file content from the user's workspace
      */
     async readFile(userId: string, filePath: string): Promise<string> {
+        this.updateActivity(userId);
         const fullPath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId, filePath);
         try {
             // Security check: ensure the path is within the user's workspace

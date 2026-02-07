@@ -148,5 +148,68 @@ export const getTools = (projectId: string) => {
                 }
             },
         }),
+        /**
+         * Web Search Tool
+         * Uses Tavily or Serper if API keys are present, otherwise returns a placeholder.
+         */
+        search_web: tool({
+            description: 'Perform a web search to retrieve information from the internet. Use this for research tasks or when you need up-to-date information.',
+            inputSchema: z.object({
+                query: z.string().describe('The search query.'),
+            }),
+            execute: async ({ query }) => {
+                console.log(`[Tool:search_web] Project ${projectId}: ${query}`);
+
+                try {
+                    const tavilyKey = process.env.TAVILY_API_KEY;
+                    const serperKey = process.env.SERPER_API_KEY;
+
+                    if (tavilyKey) {
+                        const response = await fetch('https://api.tavily.com/search', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${tavilyKey}`
+                            },
+                            body: JSON.stringify({
+                                query,
+                                search_depth: 'basic',
+                                max_results: 5
+                            })
+                        });
+                        const data = await response.json();
+                        return {
+                            success: true,
+                            results: data.results
+                        };
+                    } else if (serperKey) {
+                        const response = await fetch('https://google.serper.dev/search', {
+                            method: 'POST',
+                            headers: {
+                                'X-API-KEY': serperKey,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ q: query })
+                        });
+                        const data = await response.json();
+                        return {
+                            success: true,
+                            results: data.organic
+                        };
+                    } else {
+                        return {
+                            success: false,
+                            message: "Web search is not currently configured (missing API keys). Please rely on your internal knowledge base or ask the user to provide more context."
+                        };
+                    }
+                } catch (error: any) {
+                    console.error('[Tool:search_web] Error:', error);
+                    return {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            },
+        }),
     };
 };

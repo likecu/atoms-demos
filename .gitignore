@@ -61,7 +61,12 @@ workspaces/
 reproduce_*.ts
 debug_*.ts
 
+# 远程服务器配置文件（包含敏感信息）
+execute_migration_remote.py
+check_remote_db.exp
+list_models.py
+
 # Docker
-.docker/
 docker-compose.override.yml
+.docker/
 docker-compose.local.*

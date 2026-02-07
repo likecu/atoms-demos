@@ -1,3 +1,5 @@
+
+import { createClient } from '@supabase/supabase-js'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
@@ -33,6 +35,17 @@ export async function createServerSupabaseClient() {
                 },
             },
         }
+    )
+}
+
+/**
+ * 创建 Service Role 客户端 (无需 Cookie，拥有管理员权限)
+ * 用于后台任务和脚本
+ */
+export function createServiceRoleClient() {
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 }
 

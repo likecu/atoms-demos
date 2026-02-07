@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -29,17 +29,22 @@ import {
     Sparkles,
     TerminalSquare,
     Play,
-    Files,
-    Activity,
+    LayoutGrid,
     Edit3,
     Share2,
+    Files,
+    Activity
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TerminalPanel } from '@/components/sandbox/terminal-panel'
-import { FileExplorer } from '@/components/chat/file-explorer'
-import { AIStatusPanel } from '@/components/chat/ai-status-panel'
 import { DraggableCanvas } from '@/components/ui/draggable-canvas'
 import { ShareDialog } from '@/components/chat/share-dialog'
+import { WorkspaceProvider, useWorkspace } from '@/lib/workspace-context'
+import { WorkspacePanel } from '@/components/workspace/workspace-panel'
+import { parseLogsToAgents, parseFilesToTree } from '@/lib/log-parser'
+import { getProjectFiles } from '@/lib/actions/files'
+import { FileExplorer } from '@/components/chat/file-explorer'
+import { AIStatusPanel } from '@/components/chat/ai-status-panel'
 
 /**
  * 消息类型定义
@@ -88,14 +93,21 @@ function getStatusText(status: StreamingStatus): string {
 }
 
 /**
- * 聊天页面客户端组件
- * 整合聊天交互和代码预览功能
- * @param projectId - 项目唯一标识
- * @param projectName - 项目名称
- * @param initialCode - 初始代码内容
- * @param initialMessages - 初始消息列表
+ * Main Wrapper Component offering WorkspaceContext
  */
-export default function ChatPageClient({
+export default function ChatPageClient(props: ChatPageClientProps) {
+    return (
+        <WorkspaceProvider>
+            <ChatPageContent {...props} />
+        </WorkspaceProvider>
+    )
+}
+
+/**
+ * 聊天页面客户端组件 (Content)
+ * 整合聊天交互和代码预览功能
+ */
+function ChatPageContent({
     projectId,
     projectName,
     initialCode,
@@ -106,7 +118,7 @@ export default function ChatPageClient({
     const [isMounted, setIsMounted] = useState(false)
     const [inputValue, setInputValue] = useState('')
     const [streamingStatus, setStreamingStatus] = useState<StreamingStatus>('idle')
-    const [activeTab, setActiveTab] = useState<'preview' | 'terminal' | 'files' | 'ai-status'>('preview')
+    const [activeTab, setActiveTab] = useState<'workspace' | 'preview' | 'terminal' | 'files' | 'ai-status'>('workspace') // Modified tabs
     const [aiLogs, setAiLogs] = useState<AICallLog[]>(initialAILogs || [])
     const [isEditingName, setIsEditingName] = useState(false)
     const [currentProjectName, setCurrentProjectName] = useState(projectName)
@@ -117,15 +129,14 @@ export default function ChatPageClient({
     const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || [])
     const router = useRouter()
 
-
-
-
-
     const { code, setCode } = useAppContext()
     const { parseAndSet } = useArtifactParser()
     const { toast } = useToast()
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const chatContainerRef = useRef<HTMLDivElement>(null)
+
+    // Workspace Context
+    const { dispatch } = useWorkspace();
 
     // 组件挂载检测
     useEffect(() => {
@@ -143,6 +154,31 @@ export default function ChatPageClient({
             setCode(initialCode)
         }
     }, [initialCode, setCode])
+
+    // Load File Tree on Mount
+    useEffect(() => {
+        async function loadFiles() {
+            try {
+                const files = await getProjectFiles(projectId);
+                const tree = parseFilesToTree(files);
+                dispatch({ type: 'SET_FILE_TREE', payload: tree });
+            } catch (error) {
+                console.error("Failed to load project files:", error);
+            }
+        }
+        if (isMounted) {
+            loadFiles();
+        }
+    }, [projectId, isMounted, dispatch]);
+
+    // Parse Initial Logs
+    useEffect(() => {
+        if (initialAILogs && initialAILogs.length > 0) {
+            const agents = parseLogsToAgents(initialAILogs);
+            dispatch({ type: 'UPDATE_AGENTS', payload: agents });
+        }
+    }, [initialAILogs, dispatch]);
+
 
     /**
      * 解析 AI 响应并更新代码
@@ -171,6 +207,9 @@ export default function ChatPageClient({
                     const logs = await getAICallLogsByProjectId(projectId);
                     if (logs.length !== aiLogs.length) {
                         setAiLogs(logs);
+                        // Update Agents in Workspace
+                        const agents = parseLogsToAgents(logs);
+                        dispatch({ type: 'UPDATE_AGENTS', payload: agents });
                     }
 
                     if (serverMessages.length > messages.length) {
@@ -192,6 +231,16 @@ export default function ChatPageClient({
                             // 确保获取最后且完整的 logs
                             const finalLogs = await getAICallLogsByProjectId(projectId);
                             setAiLogs(finalLogs);
+                            const agents = parseLogsToAgents(finalLogs);
+                            dispatch({ type: 'UPDATE_AGENTS', payload: agents });
+
+                            // Check if agent generated files -> reload tree
+                            // For now, reload tree generically when status changes to ready
+                            try {
+                                const files = await getProjectFiles(projectId);
+                                const tree = parseFilesToTree(files);
+                                dispatch({ type: 'SET_FILE_TREE', payload: tree });
+                            } catch (e) { console.error(e) }
 
                             setStreamingStatus('ready');
                             handleAIResponse(lastMessage.content);
@@ -211,7 +260,7 @@ export default function ChatPageClient({
         return () => {
             if (intervalId) clearInterval(intervalId);
         };
-    }, [streamingStatus, projectId, messages.length, aiLogs.length, handleAIResponse]);
+    }, [streamingStatus, projectId, messages.length, aiLogs.length, handleAIResponse, dispatch]);
 
 
     // 自动滚动到底部
@@ -512,6 +561,17 @@ export default function ChatPageClient({
                                 <Button
                                     variant="ghost"
                                     size="sm"
+                                    onClick={() => setActiveTab('workspace')}
+                                    className={`h-7 px-3 text-xs gap-2 rounded-md ${activeTab === 'workspace'
+                                        ? 'bg-zinc-800 text-white shadow-sm'
+                                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
+                                >
+                                    <LayoutGrid className="w-3 h-3" />
+                                    <span>Workspace</span>
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => setActiveTab('preview')}
                                     className={`h-7 px-3 text-xs gap-2 rounded-md ${activeTab === 'preview'
                                         ? 'bg-zinc-800 text-white shadow-sm'
@@ -557,6 +617,10 @@ export default function ChatPageClient({
 
                             {/* 内容区域 */}
                             <div className="w-full h-full text-white">
+                                {activeTab === 'workspace' && (
+                                    <WorkspacePanel />
+                                )}
+
                                 {activeTab === 'preview' && (
                                     <DraggableCanvas
                                         defaultWidth="100%"

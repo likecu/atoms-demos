@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
-import { ArrowLeft, Send, MessageSquare, X, Loader2 } from 'lucide-react'
+import { ArrowLeft, Send, MessageSquare, X, Loader2, Sparkles, Activity, FileCode } from 'lucide-react'
+import { getAICallLogsByProjectId, getMessagesByProjectId, type AICallLog } from '@/lib/actions/message'
+import { AIStatusPanel } from '@/components/chat/ai-status-panel'
 import {
     ResizableHandle,
     ResizablePanel,
@@ -28,6 +30,7 @@ interface ChatNewClientProps {
     projectName: string
     initialCode: string
     initialMessages: ChatMessage[]
+    initialAILogs: AICallLog[]
 }
 
 /**
@@ -57,6 +60,7 @@ export default function ChatNewClient({
     projectName,
     initialCode,
     initialMessages,
+    initialAILogs,
 }: ChatNewClientProps) {
     const router = useRouter()
     const supabase = createClient()
@@ -65,6 +69,50 @@ export default function ChatNewClient({
     const [currentCode, setCurrentCode] = useState(initialCode)
     const [inputValue, setInputValue] = useState('')
     const { parseAndSet } = useArtifactParser()
+
+    const [aiLogs, setAiLogs] = useState<AICallLog[]>(initialAILogs || [])
+    const [activeTab, setActiveTab] = useState<'code' | 'status'>('code')
+    const [isProcessing, setIsProcessing] = useState(false)
+
+    // Check initial state for pending message
+    useEffect(() => {
+        const lastMsg = initialMessages[initialMessages.length - 1]
+        if (lastMsg && lastMsg.role === 'user') {
+            setIsProcessing(true)
+            setActiveTab('status') // Auto switch to status tab if processing
+        }
+    }, [])
+
+    // Realtime subscription for ai_call_logs
+    useEffect(() => {
+        const channel = supabase
+            .channel(`ai_logs:${projectId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'ai_call_logs',
+                    filter: `project_id=eq.${projectId}`
+                },
+                (payload) => {
+                    const newLog = payload.new as AICallLog
+                    setAiLogs((prev) => [...prev, newLog])
+
+                    // Check if this is an output log (task completion)
+                    if (newLog.step_type === 'output') {
+                        setIsProcessing(false)
+                        // Optionally refresh to sync messages
+                        router.refresh()
+                    }
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [projectId, supabase, router])
 
     // 使用 Vercel AI SDK 的 useChat hook
     const { messages, sendMessage, status } = useChat()
@@ -137,10 +185,20 @@ export default function ChatNewClient({
      */
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
-        if (!inputValue.trim() || status === 'streaming') return
+        if (!inputValue.trim() || status === 'streaming' || isProcessing) return
 
         const userContent = inputValue.trim()
         setInputValue('')
+
+        // Optimistic UI updates handled by useChat but we also want to track our own polling state
+        // Actually, logic is: useChat handles the stream. 
+        // IF useChat fails or we reload, THEN we poll.
+        // But here we are using useChat. 
+        // Wait, if we use sendMessage, useChat manages it.
+        // But we want to show logs too.
+
+        setIsProcessing(true)
+        setActiveTab('status')
 
         // 保存用户消息
         await saveMessage('user', userContent)
@@ -169,7 +227,7 @@ export default function ChatNewClient({
         }
     }
 
-    const isLoading = status === 'submitted' || status === 'streaming'
+    const isLoading = status === 'submitted' || status === 'streaming' || isProcessing
 
     return (
         <div className="h-screen flex flex-col bg-zinc-50">
@@ -279,39 +337,70 @@ export default function ChatNewClient({
 
                     {/* 右侧预览区域 */}
                     <ResizablePanel defaultSize="75%">
-                        <div className="h-full bg-zinc-900">
-                            {currentCode ? (
-                                <Sandpack
-                                    template="react"
-                                    theme="dark"
-                                    options={{
-                                        showNavigator: false,
-                                        editorHeight: '100vh',
-                                        showTabs: false,
-                                        showLineNumbers: false,
-                                        editorWidthPercentage: 0,
-                                    }}
-                                    customSetup={{
-                                        dependencies: {
-                                            'lucide-react': 'latest',
-                                            'recharts': 'latest',
-                                            'framer-motion': 'latest',
-                                            'clsx': 'latest',
-                                            'tailwind-merge': 'latest',
-                                        },
-                                    }}
-                                    files={{
-                                        '/App.js': currentCode,
-                                    }}
-                                />
-                            ) : (
-                                <div className="h-full flex items-center justify-center text-zinc-500">
-                                    <div className="text-center space-y-3">
-                                        <MessageSquare className="w-12 h-12 mx-auto opacity-50" />
-                                        <p className="text-sm">开始对话，让 AI 生成代码</p>
-                                    </div>
-                                </div>
-                            )}
+                        <div className="h-full bg-zinc-900 flex flex-col">
+                            {/* Tab Switcher */}
+                            <div className="h-10 border-b border-zinc-800 bg-zinc-900 flex items-center px-4 gap-4">
+                                <button
+                                    onClick={() => setActiveTab('code')}
+                                    className={`flex items-center gap-2 text-sm h-full border-b-2 px-2 transition-colors ${activeTab === 'code'
+                                        ? 'border-indigo-500 text-white'
+                                        : 'border-transparent text-zinc-400 hover:text-zinc-300'
+                                        }`}
+                                >
+                                    <FileCode className="w-4 h-4" />
+                                    代码预览
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('status')}
+                                    className={`flex items-center gap-2 text-sm h-full border-b-2 px-2 transition-colors ${activeTab === 'status'
+                                        ? 'border-indigo-500 text-white'
+                                        : 'border-transparent text-zinc-400 hover:text-zinc-300'
+                                        }`}
+                                >
+                                    <Activity className="w-4 h-4" />
+                                    AI 状态
+                                    {isProcessing && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-hidden relative">
+                                {activeTab === 'code' ? (
+                                    currentCode ? (
+                                        <Sandpack
+                                            template="react"
+                                            theme="dark"
+                                            options={{
+                                                showNavigator: false,
+                                                editorHeight: '100vh',
+                                                showTabs: false,
+                                                showLineNumbers: false,
+                                                editorWidthPercentage: 0,
+                                            }}
+                                            customSetup={{
+                                                dependencies: {
+                                                    'lucide-react': 'latest',
+                                                    'recharts': 'latest',
+                                                    'framer-motion': 'latest',
+                                                    'clsx': 'latest',
+                                                    'tailwind-merge': 'latest',
+                                                },
+                                            }}
+                                            files={{
+                                                '/App.js': currentCode,
+                                            }}
+                                        />
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center text-zinc-500">
+                                            <div className="text-center space-y-3">
+                                                <MessageSquare className="w-12 h-12 mx-auto opacity-50" />
+                                                <p className="text-sm">开始对话，让 AI 生成代码</p>
+                                            </div>
+                                        </div>
+                                    )
+                                ) : (
+                                    <AIStatusPanel logs={aiLogs} />
+                                )}
+                            </div>
                         </div>
                     </ResizablePanel>
                 </ResizablePanelGroup>

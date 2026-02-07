@@ -1,5 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { getAICallLogsByProjectId } from '@/lib/actions/message'
 import ChatNewClient from './chat-new-client'
 
 /**
@@ -57,12 +58,16 @@ export default async function ChatNewPage({
         content: msg.content,
     }))
 
+    // 6. 获取 AI 调用日志
+    const initialAILogs = await getAICallLogsByProjectId(id)
+
     return (
         <ChatNewClient
             projectId={id}
             projectName={project.name}
             initialCode={project.current_code || ''}
             initialMessages={initialMessages}
+            initialAILogs={initialAILogs}
         />
     )
 }

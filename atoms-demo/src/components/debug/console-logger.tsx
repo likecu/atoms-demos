@@ -16,7 +16,11 @@ const ConsoleLogger = () => {
             const message = args.map(arg =>
                 typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
             ).join(' ')
-            setLogs(prev => [...prev, `[${type}] ${message}`].slice(-50))
+
+            // Defer state update to avoid "Cannot update a component while rendering a different component"
+            setTimeout(() => {
+                setLogs(prev => [...prev, `[${type}] ${message}`].slice(-50))
+            }, 0)
         }
 
         console.log = (...args) => {

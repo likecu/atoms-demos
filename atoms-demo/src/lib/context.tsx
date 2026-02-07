@@ -128,6 +128,7 @@ export default function RegistrationPage() {
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [code, setCode] = useState("");
+  console.log('[AppProvider] Rendering, code length:', code.length);
 
   return (
     <AppContext.Provider value={{ code, setCode }}>
@@ -139,6 +140,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 export function useAppContext() {
   const context = useContext(AppContext);
   if (context === undefined) {
+    console.error('[useAppContext] Context is undefined! Checking stack...');
     throw new Error("useAppContext must be used within an AppProvider");
   }
   return context;

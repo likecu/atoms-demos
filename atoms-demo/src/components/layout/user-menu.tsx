@@ -63,9 +63,12 @@ export default function UserMenu() {
                     <User className="w-4 h-4 mr-2" />
                     个人信息
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled className="cursor-not-allowed opacity-50">
+                <DropdownMenuItem
+                    onClick={() => router.push('/settings')}
+                    className="cursor-pointer"
+                >
                     <Settings className="w-4 h-4 mr-2" />
-                    设置
+                    Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

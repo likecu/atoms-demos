@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
     password TEXT NOT NULL,
     email TEXT UNIQUE,
     avatar_url TEXT,
+    mcp_config TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -70,11 +71,15 @@ CREATE TABLE IF NOT EXISTS ai_call_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    parent_log_id UUID REFERENCES ai_call_logs(id) ON DELETE SET NULL,
     step_type TEXT NOT NULL CHECK (step_type IN ('thinking', 'tool_call', 'tool_result', 'output')),
     content TEXT,
+    agent_label TEXT DEFAULT 'Main Agent',
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+COMMENT ON COLUMN ai_call_logs.agent_label IS '标识哪个代理产生的日志 (Main Agent, Research Subagent 등)';
 
 -- 索引优化
 CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
