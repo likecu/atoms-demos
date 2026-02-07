@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        AUTH_SECRET: ${AUTH_SECRET}
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - AUTH_SECRET=${AUTH_SECRET}
+    restart: unless-stopped
+
+  # Supabase 本地开发环境（可选）
+  supabase:
+    image: supabase/supabase:latest
+    ports:
+      - "54321:54321"
+      - "54323:54323"
+      - "54324:54324"
+    environment:
+      - POSTGRES_PASSWORD=your-password
+      - JWT_SECRET=your-jwt-secret
+      - ANON_KEY=your-anon-key
+      - SERVICE_KEY=your-service-key
+    volumes:
+      - supabase_data:/var/lib/postgresql/data
+      - ./supabase/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+
+volumes:
+  supabase_data:
