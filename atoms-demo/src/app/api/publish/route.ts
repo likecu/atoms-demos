@@ -31,11 +31,11 @@ export async function POST(request: NextRequest) {
         const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
         if (authError || !user) {
-            console.error("[API] Publish Auth Failed:", authError);
+            console.error("[API_DEBUG] Publish Auth Failed:", authError);
             const cookieStore = await cookies();
-            console.log("[API] Cookies present:", cookieStore.getAll().map(c => c.name));
+            console.error("[API_DEBUG] Cookies present:", cookieStore.getAll().map(c => c.name));
             return NextResponse.json(
-                { error: "请先登录" },
+                { error: "请先登录 (DEBUG_VERIFY)" },
                 { status: 401 }
             );
         }
