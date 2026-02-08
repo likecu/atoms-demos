@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
+console.log("[DEBUG] API Route /api/publish loaded (File Load Time)");
+
 /**
  * 发布项目 API
  * 将当前代码快照发布为公开分享链接
@@ -12,6 +14,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
  * @returns 发布成功返回分享链接，失败返回错误信息
  */
 export async function POST(request: NextRequest) {
+    console.log("[DEBUG] POST /api/publish request received");
     try {
         const { projectId, code } = await request.json();
 
