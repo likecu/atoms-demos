@@ -73,6 +73,7 @@ export default function ChatNewClient({
     const [aiLogs, setAiLogs] = useState<AICallLog[]>(initialAILogs || [])
     const [activeTab, setActiveTab] = useState<'code' | 'status'>('code')
     const [isProcessing, setIsProcessing] = useState(false)
+    const [isComposing, setIsComposing] = useState(false)
 
     // Check initial state for pending message
     useEffect(() => {
@@ -215,10 +216,24 @@ export default function ChatNewClient({
     }, [allMessages])
 
     /**
+     * 处理输入法组合开始事件
+     */
+    const handleCompositionStart = () => {
+        setIsComposing(true)
+    }
+
+    /**
+     * 处理输入法组合结束事件
+     */
+    const handleCompositionEnd = () => {
+        setIsComposing(false)
+    }
+
+    /**
      * 处理键盘事件：Enter 发送，Shift+Enter 换行
      */
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
             e.preventDefault()
             const form = e.currentTarget.form
             if (form) {
@@ -309,6 +324,8 @@ export default function ChatNewClient({
                                     <Textarea
                                         value={inputValue}
                                         onChange={(e) => setInputValue(e.target.value)}
+                                        onCompositionStart={handleCompositionStart}
+                                        onCompositionEnd={handleCompositionEnd}
                                         onKeyDown={handleKeyDown}
                                         placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
                                         className="min-h-[80px] resize-none"

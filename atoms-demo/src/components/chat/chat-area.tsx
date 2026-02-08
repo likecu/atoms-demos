@@ -60,6 +60,7 @@ export default function ChatArea() {
     const { parseAndSet } = useArtifactParser();
     const [input, setInput] = useState("");
     const [streamingStatus, setStreamingStatus] = useState<StreamingStatus>('idle');
+    const [isComposing, setIsComposing] = useState(false);
     const { toast } = useToast();
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +73,20 @@ export default function ChatArea() {
             sendMessage({ text: input });
             setInput("");
         }
+    };
+
+    /**
+     * 处理输入法组合开始事件
+     */
+    const handleCompositionStart = () => {
+        setIsComposing(true);
+    };
+
+    /**
+     * 处理输入法组合结束事件
+     */
+    const handleCompositionEnd = () => {
+        setIsComposing(false);
     };
 
     useEffect(() => {
@@ -164,8 +179,10 @@ export default function ChatArea() {
                     <Textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
+                        onCompositionStart={handleCompositionStart}
+                        onCompositionEnd={handleCompositionEnd}
                         onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
+                            if (e.key === "Enter" && !e.shiftKey && !isComposing) {
                                 e.preventDefault();
                                 if (input.trim()) {
                                     handleSubmit(e as any);

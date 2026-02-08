@@ -124,6 +124,7 @@ function ChatPageContent({
     const [currentProjectName, setCurrentProjectName] = useState(projectName)
     const [isRenaming, setIsRenaming] = useState(false)
     const [isShareDialogOpen, setIsShareDialogOpen] = useState(false)
+    const [isComposing, setIsComposing] = useState(false)
 
     // Maintain messages state locally
     const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || [])
@@ -322,11 +323,25 @@ function ChatPageContent({
     }
 
     /**
+     * 处理输入法组合开始事件
+     */
+    const handleCompositionStart = () => {
+        setIsComposing(true)
+    }
+
+    /**
+     * 处理输入法组合结束事件
+     */
+    const handleCompositionEnd = () => {
+        setIsComposing(false)
+    }
+
+    /**
      * 处理键盘事件
      * @param e - 键盘事件
      */
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
             e.preventDefault()
             if (inputValue.trim()) {
                 const formEvent = new Event('submit', { cancelable: true, bubbles: true })
@@ -529,6 +544,8 @@ function ChatPageContent({
                                         <Textarea
                                             value={inputValue}
                                             onChange={(e) => setInputValue(e.target.value)}
+                                            onCompositionStart={handleCompositionStart}
+                                            onCompositionEnd={handleCompositionEnd}
                                             onKeyDown={handleKeyDown}
                                             placeholder="描述您想要的功能... (Shift+Enter 换行)"
                                             className="min-h-[60px] w-full resize-none rounded-xl pr-12 py-3 text-sm"
