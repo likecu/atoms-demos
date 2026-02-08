@@ -177,8 +177,14 @@ export default function SandpackPreview({ projectId }: SandpackPreviewProps) {
     if (hasWorkspaceFiles && workspaceFiles) {
         const { files: wsFiles, projectType: wsProjectType, entryFile } = workspaceFiles;
 
+        // Debug logging
+        console.log('[SandpackPreview] projectType:', wsProjectType);
+        console.log('[SandpackPreview] hasIndexHtml:', !!wsFiles['index.html']);
+        console.log('[SandpackPreview] fileKeys:', Object.keys(wsFiles).slice(0, 10));
+
         // HTML 项目 - 使用 iframe 直接渲染，避免 Sandpack 超时问题
         if (wsProjectType === 'html' && wsFiles['index.html']) {
+            console.log('[SandpackPreview] Using HtmlIframePreview for HTML project');
             return (
                 <HtmlIframePreview
                     files={wsFiles}
@@ -186,6 +192,7 @@ export default function SandpackPreview({ projectId }: SandpackPreviewProps) {
                 />
             );
         }
+
 
         // React 项目 - 使用 Sandpack
         const template = 'react';
