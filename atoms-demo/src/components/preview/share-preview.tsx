@@ -92,6 +92,10 @@ function TextPreview({ content }: { content: string }) {
  * @param code - 代码内容
  */
 export default function SharePreview({ code }: SharePreviewProps) {
+    // 调试日志
+    console.log('[SharePreview] Received code length:', code?.length || 0);
+    console.log('[SharePreview] Code preview:', code?.substring(0, 100));
+
     // 检测代码类型
     const isReactComponent =
         code.includes('export default') ||
@@ -105,6 +109,10 @@ export default function SharePreview({ code }: SharePreviewProps) {
         (code.includes('<head>') && code.includes('<body>'));
 
     const isRenderable = isReactComponent || isHtmlDocument;
+
+    console.log('[SharePreview] isReactComponent:', isReactComponent);
+    console.log('[SharePreview] isHtmlDocument:', isHtmlDocument);
+    console.log('[SharePreview] isRenderable:', isRenderable);
 
     // 如果代码为空，显示空状态
     if (!code || code.trim() === "") {
