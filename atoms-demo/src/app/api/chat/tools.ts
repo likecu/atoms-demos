@@ -52,6 +52,15 @@ export const getTools = (projectId: string) => {
             }),
             execute: async ({ path }) => {
                 console.log(`[Tool:readFile] Project ${projectId}: ${path}`);
+
+                // Security check: Prevent absolute paths and directory traversal
+                if (path.startsWith('/') || path.includes('..')) {
+                    return {
+                        success: false,
+                        error: 'Access denied: Path must be relative and within the workspace'
+                    };
+                }
+
                 try {
                     const result = await sandboxManager.execCommand(projectId, ['cat', path]);
 
@@ -89,6 +98,15 @@ export const getTools = (projectId: string) => {
             }),
             execute: async ({ path, content }) => {
                 console.log(`[Tool:writeFile] Project ${projectId}: ${path} (${content.length} bytes)`);
+
+                // Security check: Prevent absolute paths and directory traversal
+                if (path.startsWith('/') || path.includes('..')) {
+                    return {
+                        success: false,
+                        error: 'Access denied: Path must be relative and within the workspace'
+                    };
+                }
+
                 try {
                     // 使用 base64 编码避免 shell 转义问题
                     const b64Content = Buffer.from(content).toString('base64');

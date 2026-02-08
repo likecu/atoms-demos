@@ -59,7 +59,7 @@ export class SandboxManager {
      * Ensure the workspace directory exists for the user
      */
     async initWorkspace(userId: string): Promise<string> {
-        const workspacePath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId);
+        const workspacePath = path.join(SANDBOX_CONFIG.LOCAL_WORKSPACES_DIR, userId);
         try {
             await fs.mkdir(workspacePath, { recursive: true });
             // Create a default readme
@@ -127,6 +127,9 @@ export class SandboxManager {
             return container;
         }
 
+        // Calculate HOST path for binding
+        const hostWorkspacePath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId);
+
         // Create new container
         // Note: We mount the host path to /workspace in the container
         const container = await docker.createContainer({
@@ -136,7 +139,7 @@ export class SandboxManager {
             Cmd: ['/bin/sh'], // Default command to keep it alive
             WorkingDir: '/workspace',
             HostConfig: {
-                Binds: [`${workspacePath}:/workspace`],
+                Binds: [`${hostWorkspacePath}:/workspace`],
                 Memory: SANDBOX_CONFIG.MEMORY_LIMIT,
                 CpuShares: SANDBOX_CONFIG.CPU_SHARES,
                 // AutoRemove: true, // Don't auto-remove so we can reuse it
@@ -226,7 +229,7 @@ export class SandboxManager {
      */
     async listFiles(userId: string, subPath: string = ''): Promise<string[]> {
         this.updateActivity(userId);
-        const workspacePath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId, subPath);
+        const workspacePath = path.join(SANDBOX_CONFIG.LOCAL_WORKSPACES_DIR, userId, subPath);
         try {
             return await fs.readdir(workspacePath);
         } catch (e) {
@@ -239,7 +242,7 @@ export class SandboxManager {
      */
     async listFilesDetailed(userId: string, subPath: string = ''): Promise<{ name: string; isDirectory: boolean }[]> {
         this.updateActivity(userId);
-        const workspacePath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId, subPath);
+        const workspacePath = path.join(SANDBOX_CONFIG.LOCAL_WORKSPACES_DIR, userId, subPath);
         try {
             const entries = await fs.readdir(workspacePath, { withFileTypes: true });
             return entries.map(entry => ({
@@ -257,10 +260,10 @@ export class SandboxManager {
      */
     async readFile(userId: string, filePath: string): Promise<string> {
         this.updateActivity(userId);
-        const fullPath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId, filePath);
+        const fullPath = path.join(SANDBOX_CONFIG.LOCAL_WORKSPACES_DIR, userId, filePath);
         try {
             // Security check: ensure the path is within the user's workspace
-            if (!fullPath.startsWith(path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId))) {
+            if (!fullPath.startsWith(path.join(SANDBOX_CONFIG.LOCAL_WORKSPACES_DIR, userId))) {
                 throw new Error('Access denied: File path outside workspace');
             }
             return await fs.readFile(fullPath, 'utf-8');

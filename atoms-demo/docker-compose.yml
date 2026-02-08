@@ -16,9 +16,9 @@ services:
       - ./workspaces:/app/workspaces  # 持久化工作区
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       - AUTH_SECRET=${AUTH_SECRET}
+      - SANDBOX_HOST_DIR=/home/milk/atoms-demo/workspaces
     restart: unless-stopped
 
   # Supabase 本地开发环境（可选）
