@@ -30,17 +30,22 @@ export async function POST(request: NextRequest) {
         const supabaseClient = await createServerSupabaseClient();
         const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
+        // [DEBUG] Auth Logging
         if (authError || !user) {
             console.error("[API_DEBUG] Publish Auth Failed:", authError);
             const cookieStore = await cookies();
-            console.error("[API_DEBUG] Cookies present:", cookieStore.getAll().map(c => c.name));
+            const cookieNames = cookieStore.getAll().map(c => c.name);
+            console.error("[API_DEBUG] Cookies present:", cookieNames);
+            console.error("[API_DEBUG] Auth Error Details:", JSON.stringify(authError, null, 2));
+
             return NextResponse.json(
-                { error: "请先登录 (DEBUG_VERIFY)" },
+                { error: "请先登录 (Authorization Failed)" },
                 { status: 401 }
             );
         }
 
         const userId = user.id;
+        console.log(`[API_DEBUG] User Authenticated: ${userId}`);
 
         // 创建 Supabase 客户端 (使用 service role key 绕过 RLS)
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -61,6 +66,25 @@ export async function POST(request: NextRequest) {
 
         // 如果没有 projectId，创建一个默认项目
         let finalProjectId = projectId;
+
+        // [Safety Check] 如果传递了 projectId，验证其是否存在且属于该用户
+        if (finalProjectId) {
+            const { data: projectCheck, error: checkError } = await supabase
+                .from("projects")
+                .select("id")
+                .eq("id", finalProjectId)
+                .eq("user_id", userId)
+                .single();
+
+            if (checkError || !projectCheck) {
+                console.warn(`[API_WARN] Project ID ${finalProjectId} invalid or not owned by user. Creating new project instead.`);
+                console.warn(`[API_WARN] Check Error:`, checkError);
+                finalProjectId = null; // Reset to null to trigger creation
+            } else {
+                console.log(`[API_DEBUG] Project ID ${finalProjectId} validated.`);
+            }
+        }
+
         if (!finalProjectId) {
             const { data: newProject, error: projectError } = await supabase
                 .from("projects")
