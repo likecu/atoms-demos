@@ -6,6 +6,7 @@ import {
     SandpackLayout,
     SandpackPreview as SandpackPreviewPanel,
 } from "@codesandbox/sandpack-react";
+import ClientReactPreview from "./client-react-preview";
 import { FileText, AlertCircle, Code, Eye, FileCode } from "lucide-react";
 import { cn } from "@/lib/utils";
 

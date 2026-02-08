@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Sandpack } from "@codesandbox/sandpack-react";
+import ClientReactPreview from "./client-react-preview";
 import { useAppContext } from "@/lib/context";
 import { Loader2 } from "lucide-react";
 
@@ -194,169 +195,35 @@ export default function SandpackPreview({ projectId }: SandpackPreviewProps) {
         }
 
 
-        // React 项目 - 使用 Sandpack
-        const template = 'react';
-
-        // 构建 Sandpack 文件结构
-        const sandpackFiles: Record<string, string | { code: string; hidden?: boolean }> = {};
-
         if (wsProjectType === 'react') {
+            // For ClientReactPreview, we just need to pass the files map.
+            // It will look for /App.js or /App.tsx or similar.
+            // We might need to ensure the keys start with / if they don't? 
+            // The browser preview component handles simple structure.
 
-            // React 项目 - 动态映射所有文件
-            for (const [filePath, content] of Object.entries(wsFiles)) {
-                // 如果是 package.json，我们需要确保它包含 react 依赖
-                if (filePath === 'package.json') {
-                    try {
-                        const pkg = JSON.parse(content);
-                        const dependencies = pkg.dependencies || {};
-                        const devDependencies = pkg.devDependencies || {};
+            // Normalize keys to start with / if needed, though ClientReactPreview logic 
+            // currently looks for specific keys. 
+            // Let's pass the raw files and let ClientReactPreview handle it or adjust here.
 
-                        // 检查是否缺失关键依赖
-                        const hasReact = dependencies['react'] || devDependencies['react'];
-                        const hasReactDOM = dependencies['react-dom'] || devDependencies['react-dom'];
-
-                        if (!hasReact || !hasReactDOM) {
-                            // 混合原有依赖和 React 依赖
-                            pkg.dependencies = {
-                                ...dependencies,
-                                "react": dependencies['react'] || "^18.2.0",
-                                "react-dom": dependencies['react-dom'] || "^18.2.0",
-                                "react-scripts": "5.0.1" // 添加 react-scripts 以防万一
-                            };
-                            sandpackFiles[`/${filePath}`] = JSON.stringify(pkg, null, 2);
-                        } else {
-                            sandpackFiles[`/${filePath}`] = content;
-                        }
-                    } catch (e) {
-                        // 解析失败，使用原始内容（虽然可能还是坏的）
-                        console.error("Failed to parse user package.json", e);
-                        sandpackFiles[`/${filePath}`] = content;
-                    }
-                } else {
-                    sandpackFiles[`/${filePath}`] = content;
-                }
+            // Adjust files for ClientReactPreview
+            const previewFiles: Record<string, string> = {};
+            for (const [key, val] of Object.entries(wsFiles)) {
+                // Ensure keys start with /
+                const newKey = key.startsWith('/') ? key : `/${key}`;
+                previewFiles[newKey] = val;
             }
 
-            // 如果没有 package.json，创建一个默认的
-            if (!sandpackFiles['/package.json']) {
-                sandpackFiles["/package.json"] = {
-                    code: JSON.stringify({
-                        "name": "react-app",
-                        "version": "1.0.0",
-                        "main": "/index.js",
-                        "dependencies": {
-                            "react": "^18.2.0",
-                            "react-dom": "^18.2.0",
-                            "lucide-react": "latest",
-                            "recharts": "latest",
-                            "framer-motion": "latest",
-                            "clsx": "latest",
-                            "tailwind-merge": "latest"
-                        }
-                    }),
-                    hidden: true
-                };
-            }
-
-            // 查找入口文件
-            const entryFiles = ['src/index.jsx', 'src/index.tsx', 'src/main.jsx', 'src/main.tsx', 'index.jsx', 'index.tsx'];
-            const foundEntry = entryFiles.find(f => wsFiles[f]);
-
-            // 如果找到入口文件，创建引导 index.js
-            if (foundEntry) {
-                // Sandpack 默认入口是 /index.js，我们需要它引用用户的入口
-                if (!sandpackFiles['/index.js']) {
-                    sandpackFiles["/index.js"] = {
-                        code: `import "./${foundEntry}";`,
-                        hidden: true
-                    };
-                }
-            } else {
-                // 如果没有找到显式入口，尝试查找 App 组件并使用旧逻辑封装
-                const appFile = wsFiles['src/App.jsx'] || wsFiles['src/App.tsx'] || wsFiles['App.jsx'] || wsFiles['App.tsx'];
-                const appPath = wsFiles['src/App.jsx'] ? './src/App' :
-                    wsFiles['src/App.tsx'] ? './src/App' :
-                        wsFiles['App.jsx'] ? './App' : './App';
-
-                if (appFile) {
-                    sandpackFiles["/index.js"] = {
-                        code: `import React, { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import "./styles.css";
-
-window.print = () => { console.log("Print blocked in preview"); };
-
-import App from "${appPath}";
-
-const root = createRoot(document.getElementById("root"));
-root.render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);`,
-                        hidden: true
-                    };
-                }
-            }
-
-            // 确保有 styles.css (如果用户没提供)
-            if (!sandpackFiles['/styles.css'] && !sandpackFiles['/src/styles.css'] && !sandpackFiles['/src/index.css']) {
-                sandpackFiles["/styles.css"] = {
-                    code: `body {
-  font-family: sans-serif;
-  -webkit-font-smoothing: auto;
-  -moz-font-smoothing: auto;
-  -moz-osx-font-smoothing: grayscale;
-  font-smoothing: auto;
-  text-rendering: optimizeLegibility;
-  font-smooth: always;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-}
-
-* {
-  box-sizing: border-box;
-}`,
-                    hidden: true
-                };
-            }
+            return <ClientReactPreview files={previewFiles} code="" />;
         }
 
-        return (
-            <div className="h-full w-full relative">
-                {isLoading && (
-                    <div className="absolute inset-0 z-10 bg-zinc-900 flex flex-col items-center justify-center">
-                        <div className="flex flex-col items-center gap-3">
-                            <Loader2 className="h-8 w-8 text-zinc-400 animate-spin" />
-                            <p className="text-sm text-zinc-500">正在加载预览...</p>
-                        </div>
-                    </div>
-                )}
+        /* 
+        // Fallback or old Sandpack logic (commented out or removed)
+        const template = 'react';
+        // ... (rest of old logic)
+        */
 
-                <Sandpack
-                    template={template as any}
-                    theme="dark"
-                    options={{
-                        showNavigator: false,
-                        editorHeight: "100vh",
-                        showTabs: true,
-                        externalResources: [
-                            "https://cdn.tailwindcss.com"
-                        ],
-                    }}
-                    customSetup={template === 'react' ? {
-                        dependencies: {
-                            "lucide-react": "latest",
-                            "recharts": "latest",
-                            "framer-motion": "latest",
-                            "clsx": "latest",
-                            "tailwind-merge": "latest",
-                        },
-                    } : undefined}
-                    files={sandpackFiles}
-                />
-            </div>
-        );
+        // Return null or fallback if we reach here (shouldn't for react type)
+        return null;
     }
 
     // 回退逻辑：使用 code 状态（原有逻辑）
@@ -476,6 +343,8 @@ root.render(
                 } : undefined}
                 files={files}
             />
+            */
+            return <ClientReactPreview code={code} />;
         </div>
     );
 }
