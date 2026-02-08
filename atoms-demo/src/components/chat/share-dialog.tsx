@@ -124,11 +124,43 @@ export function ShareDialog({ open, onOpenChange, projectId, code }: ShareDialog
      * @param url - 要复制的URL
      * @param mode - 分享模式
      */
+    /**
+     * 复制链接到剪贴板
+     * @param url - 要复制的URL
+     * @param mode - 分享模式
+     */
     const copyToClipboard = async (url: string, mode: "preview" | "chat") => {
-        try {
-            const fullUrl = mode === "chat" ? `${url}?mode=chat` : url;
-            await navigator.clipboard.writeText(fullUrl);
+        const fullUrl = mode === "chat" ? `${url}?mode=chat` : url;
+        let success = false;
 
+        try {
+            await navigator.clipboard.writeText(fullUrl);
+            success = true;
+        } catch (err) {
+            // Fallback for insecure contexts (HTTP)
+            try {
+                const textArea = document.createElement("textarea");
+                textArea.value = fullUrl;
+
+                // Ensure textarea is not visible but part of the DOM
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                textArea.style.top = "0";
+                textArea.setAttribute("readonly", "");
+
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+
+                success = document.execCommand('copy');
+                document.body.removeChild(textArea);
+            } catch (fallbackError) {
+                console.error("Fallback copy failed:", fallbackError);
+                success = false;
+            }
+        }
+
+        if (success) {
             if (mode === "preview") {
                 setCopiedPreview(true);
                 setTimeout(() => setCopiedPreview(false), 2000);
@@ -136,9 +168,8 @@ export function ShareDialog({ open, onOpenChange, projectId, code }: ShareDialog
                 setCopiedChat(true);
                 setTimeout(() => setCopiedChat(false), 2000);
             }
-
             toast.success("链接已复制到剪贴板");
-        } catch (error) {
+        } else {
             toast.error("复制失败，请手动复制链接");
         }
     };
