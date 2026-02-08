@@ -14,6 +14,12 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 
@@ -31,7 +37,6 @@ interface ProjectCardProps {
  * @param onRename - 重命名回调函数
  */
 export default function ProjectCard({ project, onDelete, onRename }: ProjectCardProps) {
-    const [showMenu, setShowMenu] = useState(false)
     const [showRenameDialog, setShowRenameDialog] = useState(false)
     const [newName, setNewName] = useState(project.name)
     const [isPending, startTransition] = useTransition()
@@ -92,45 +97,30 @@ export default function ProjectCard({ project, onDelete, onRename }: ProjectCard
 
                     {/* 更多操作按钮 */}
                     <div className="relative">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => setShowMenu(!showMenu)}
-                        >
-                            <MoreVertical className="w-4 h-4" />
-                        </Button>
-
-                        {showMenu && (
-                            <>
-                                <div
-                                    className="fixed inset-0 z-10"
-                                    onClick={() => setShowMenu(false)}
-                                />
-                                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-zinc-200 py-1 z-20">
-                                    <button
-                                        className="w-full px-3 py-2 text-sm text-left hover:bg-zinc-50 flex items-center gap-2"
-                                        onClick={() => {
-                                            setShowMenu(false)
-                                            setShowRenameDialog(true)
-                                        }}
-                                    >
-                                        <Edit2 className="w-4 h-4" />
-                                        重命名
-                                    </button>
-                                    <button
-                                        className="w-full px-3 py-2 text-sm text-left hover:bg-red-50 text-red-600 flex items-center gap-2"
-                                        onClick={() => {
-                                            setShowMenu(false)
-                                            onDelete?.(project.id)
-                                        }}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                        删除
-                                    </button>
-                                </div>
-                            </>
-                        )}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <MoreVertical className="w-4 h-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-36">
+                                <DropdownMenuItem onClick={() => setShowRenameDialog(true)}>
+                                    <Edit2 className="w-4 h-4 mr-2" />
+                                    重命名
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                    onClick={() => onDelete?.(project.id)}
+                                >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    删除
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
 

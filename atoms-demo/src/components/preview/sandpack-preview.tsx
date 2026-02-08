@@ -22,6 +22,98 @@ interface WorkspaceFiles {
     isEmpty: boolean;
 }
 
+/**
+ * HTML iframe 预览组件属性
+ */
+interface HtmlIframePreviewProps {
+    files: Record<string, string>;
+    isLoading: boolean;
+}
+
+/**
+ * HTML iframe 预览组件
+ * 用于渲染使用 CDN 加载 React/Babel 的 HTML 项目
+ * @param files - 工作区文件内容
+ * @param isLoading - 是否正在加载
+ */
+function HtmlIframePreview({ files, isLoading }: HtmlIframePreviewProps) {
+    const [blobUrl, setBlobUrl] = useState<string | null>(null);
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+
+    useEffect(() => {
+        if (!files['index.html']) return;
+
+        // 获取 HTML 内容
+        let htmlContent = files['index.html'];
+
+        // 内联 CSS 文件
+        const cssFiles = Object.entries(files).filter(([path]) => path.endsWith('.css'));
+        for (const [cssPath, cssContent] of cssFiles) {
+            // 替换 <link href="xxx.css"> 为内联 <style>
+            const linkRegex = new RegExp(`<link[^>]*href=["']${cssPath}["'][^>]*>`, 'gi');
+            if (linkRegex.test(htmlContent)) {
+                htmlContent = htmlContent.replace(linkRegex, `<style>${cssContent}</style>`);
+            } else {
+                // 如果没有找到对应的 link 标签，在 head 中添加
+                htmlContent = htmlContent.replace('</head>', `<style>${cssContent}</style></head>`);
+            }
+        }
+
+        // 内联 JS 文件（非 CDN）
+        const jsFiles = Object.entries(files).filter(([path]) =>
+            (path.endsWith('.js') || path.endsWith('.jsx')) &&
+            !path.includes('node_modules')
+        );
+        for (const [jsPath, jsContent] of jsFiles) {
+            // 替换 <script src="xxx.js"> 为内联 <script>
+            const scriptRegex = new RegExp(`<script[^>]*src=["']${jsPath}["'][^>]*></script>`, 'gi');
+            if (scriptRegex.test(htmlContent)) {
+                // 对于 JSX 文件，保持 type="text/babel"
+                const isBabel = jsPath.endsWith('.jsx');
+                const scriptType = isBabel ? ' type="text/babel"' : '';
+                htmlContent = htmlContent.replace(scriptRegex, `<script${scriptType}>${jsContent}</script>`);
+            }
+        }
+
+        // 创建 Blob URL
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        setBlobUrl(url);
+
+        // 清理旧的 Blob URL
+        return () => {
+            URL.revokeObjectURL(url);
+        };
+    }, [files]);
+
+    return (
+        <div className="h-full w-full relative bg-white">
+            {isLoading && (
+                <div className="absolute inset-0 z-10 bg-zinc-900 flex flex-col items-center justify-center">
+                    <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="h-8 w-8 text-zinc-400 animate-spin" />
+                        <p className="text-sm text-zinc-500">正在加载预览...</p>
+                    </div>
+                </div>
+            )}
+
+            {blobUrl ? (
+                <iframe
+                    ref={iframeRef}
+                    src={blobUrl}
+                    className="w-full h-full border-0"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                    title="HTML Preview"
+                />
+            ) : (
+                <div className="h-full w-full flex items-center justify-center bg-zinc-900 text-zinc-500">
+                    <p className="text-sm">无法加载 HTML 预览</p>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function SandpackPreview({ projectId }: SandpackPreviewProps) {
     const { code } = useAppContext();
     const [isLoading, setIsLoading] = useState(true);
@@ -85,30 +177,24 @@ export default function SandpackPreview({ projectId }: SandpackPreviewProps) {
     if (hasWorkspaceFiles && workspaceFiles) {
         const { files: wsFiles, projectType: wsProjectType, entryFile } = workspaceFiles;
 
-        // 根据项目类型选择模板
-        const template = wsProjectType === 'html' ? 'vanilla' : 'react';
+        // HTML 项目 - 使用 iframe 直接渲染，避免 Sandpack 超时问题
+        if (wsProjectType === 'html' && wsFiles['index.html']) {
+            return (
+                <HtmlIframePreview
+                    files={wsFiles}
+                    isLoading={isLoading}
+                />
+            );
+        }
+
+        // React 项目 - 使用 Sandpack
+        const template = 'react';
 
         // 构建 Sandpack 文件结构
         const sandpackFiles: Record<string, string | { code: string; hidden?: boolean }> = {};
 
-        if (wsProjectType === 'html') {
-            // HTML 项目 - 保持原有逻辑，但支持更多文件
-            for (const [filePath, content] of Object.entries(wsFiles)) {
-                sandpackFiles[`/${filePath}`] = content;
-            }
+        if (wsProjectType === 'react') {
 
-            // 添加 package.json 如果不存在
-            if (!wsFiles['package.json']) {
-                sandpackFiles["/package.json"] = {
-                    code: JSON.stringify({
-                        "name": "workspace-preview",
-                        "version": "1.0.0",
-                        "main": "index.html"
-                    }),
-                    hidden: true
-                };
-            }
-        } else if (wsProjectType === 'react') {
             // React 项目 - 动态映射所有文件
             for (const [filePath, content] of Object.entries(wsFiles)) {
                 // 如果是 package.json，我们需要确保它包含 react 依赖

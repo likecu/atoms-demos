@@ -16,40 +16,52 @@ echo "=========================================="
 echo "Atoms Demo 远程部署脚本"
 echo "=========================================="
 
-# 1. 创建远程目录
-echo "步骤 1: 创建远程目录..."
-ssh -i $SSH_KEY $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_DIR"
+# 2. 更新代码 (使用 Git)
+echo "步骤 2: 更新项目代码..."
 
-# 2. 上传代码文件
-echo "步骤 2: 上传项目代码..."
-rsync -avz --progress \
-  --exclude 'node_modules' \
-  --exclude '.next' \
-  --exclude '.git' \
-  --exclude '*.log' \
-  --exclude 'test_logs' \
-  --exclude 'workspaces' \
-  --exclude '.env.local' \
-  --exclude 'tsconfig.tsbuildinfo' \
-  --exclude 'reproduce_*.ts' \
-  --exclude 'debug_*.ts' \
-  --exclude 'test_*.py' \
-  --exclude 'verify_*.py' \
-  --exclude 'list_models.py' \
-  --exclude 'execute_migration_remote.py' \
-  --exclude 'check_remote_db.exp' \
-  --exclude 'add_agent_label_to_logs.sql' \
-  -e "ssh -i $SSH_KEY" \
-  $LOCAL_DIR/ \
-  $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/
+ssh -i $SSH_KEY $REMOTE_USER@$REMOTE_HOST << ENDSSH
+  set -e
+  
+  # 检查是否已经是 Git 仓库
+  if [ ! -d "$REMOTE_DIR/.git" ]; then
+    echo "远程目录不是 Git 仓库，准备迁移..."
+    
+    # 备份现有目录 (如果有)
+    if [ -d "$REMOTE_DIR" ]; then
+      echo "备份现有目录到 ${REMOTE_DIR}.bak_$(date +%Y%m%d%H%M%S)..."
+      mv "$REMOTE_DIR" "${REMOTE_DIR}.bak_$(date +%Y%m%d%H%M%S)"
+    fi
+    
+    # 克隆仓库
+    echo "正在克隆仓库..."
+    git clone https://github.com/likecu/atoms-demos.git "$REMOTE_DIR"
+    
+    # 恢复 workspaces (从最近的备份)
+    LATEST_BACKUP=\$(ls -dt ${REMOTE_DIR}.bak_* | head -1)
+    if [ -n "\$LATEST_BACKUP" ] && [ -d "\$LATEST_BACKUP/workspaces" ]; then
+      echo "从 \$LATEST_BACKUP 恢复 workspaces..."
+      mv "\$LATEST_BACKUP/workspaces" "$REMOTE_DIR/workspaces"
+    else
+      echo "未找到旧的 workspaces，创建新目录..."
+      mkdir -p "$REMOTE_DIR/workspaces"
+    fi
+    
+  else
+    echo "远程目录已是 Git 仓库，执行更新..."
+    cd "$REMOTE_DIR"
+    git fetch --all
+    git reset --hard origin/main
+    git pull origin main
+  fi
+ENDSSH
 
 # 3. 上传生产环境配置
 echo "步骤 3: 上传环境配置文件..."
 scp -i $SSH_KEY $LOCAL_DIR/.env.production $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/.env
 
-# 4. 上传 Sandbox Dockerfile
-echo "步骤 4: 上传 Sandbox Dockerfile..."
-scp -i $SSH_KEY $LOCAL_DIR/src/lib/sandbox/Dockerfile $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/sandbox.Dockerfile
+# 4. 准备 Sandbox Dockerfile
+echo "步骤 4: 准备 Sandbox Dockerfile..."
+ssh -i $SSH_KEY $REMOTE_USER@$REMOTE_HOST "cp $REMOTE_DIR/src/lib/sandbox/Dockerfile $REMOTE_DIR/sandbox.Dockerfile"
 
 # 5. 远程执行构建和部署
 echo "步骤 5: 远程执行构建和部署..."
