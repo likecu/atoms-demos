@@ -511,7 +511,7 @@ function ChatPageContent({
                                             </div>
                                         )}
 
-                                        <div className="flex flex-col gap-4 py-4">
+                                        <div className="flex flex-col gap-4 py-4 pb-32">
                                             {messages.map((message, index) => (
                                                 <MessageBubble
                                                     key={message.id || index}

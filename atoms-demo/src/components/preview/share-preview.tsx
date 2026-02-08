@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
     SandpackProvider,
     SandpackLayout,
     SandpackPreview as SandpackPreviewPanel,
 } from "@codesandbox/sandpack-react";
-import { FileText, AlertCircle } from "lucide-react";
+import { FileText, AlertCircle, Code, Eye, FileCode } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SharePreviewProps {
     code: string;
@@ -32,7 +33,7 @@ function HtmlIframePreview({ htmlContent }: { htmlContent: string }) {
     }, [htmlContent]);
 
     return (
-        <div className="h-screen w-screen bg-white">
+        <div className="h-full w-full bg-white">
             {blobUrl ? (
                 <iframe
                     ref={iframeRef}
