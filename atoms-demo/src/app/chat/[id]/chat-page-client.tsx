@@ -436,7 +436,6 @@ function ChatPageContent({
                     size="sm"
                     onClick={() => setIsShareDialogOpen(true)}
                     className="gap-2 mr-2"
-                    disabled={!code}
                 >
                     <Share2 className="w-4 h-4" />
                     <span className="hidden sm:inline">分享</span>

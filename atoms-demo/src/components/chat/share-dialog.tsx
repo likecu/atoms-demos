@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Copy, Check, Loader2, Globe, MessageSquare } from "lucide-react";
+import { getProjectFiles, getProjectFileContent } from "@/lib/actions/files";
 
 /**
  * 分享对话框组件属性
@@ -47,17 +48,55 @@ export function ShareDialog({ open, onOpenChange, projectId, code }: ShareDialog
      * 处理发布操作
      * 调用发布API生成分享token
      */
+    /**
+     * 处理发布操作
+     * 调用发布API生成分享token
+     */
     const handlePublish = async () => {
         if (isPublishing) return;
 
         setIsPublishing(true);
         try {
+            let codeToPublish = code;
+
+            // 如果当前上下文中没有代码，尝试从项目文件中获取
+            if (!codeToPublish) {
+                try {
+                    const files = await getProjectFiles(projectId);
+                    if (files.length > 0) {
+                        // 优先查找特定入口文件，否则取第一个文件
+                        const mainFile = files.find(f =>
+                            f.type === 'file' && (
+                                f.name === 'App.tsx' ||
+                                f.name === 'App.js' ||
+                                f.name === 'index.html' ||
+                                f.name === 'main.py' ||
+                                f.name.endsWith('.tsx') ||
+                                f.name.endsWith('.py')
+                            )
+                        ) || files.find(f => f.type === 'file');
+
+                        if (mainFile) {
+                            codeToPublish = await getProjectFileContent(projectId, mainFile.name);
+                        }
+                    }
+                } catch (err) {
+                    console.error("尝试获取项目文件失败:", err);
+                }
+            }
+
+            if (!codeToPublish) {
+                toast.error("未找到可分享的代码内容");
+                setIsPublishing(false);
+                return;
+            }
+
             const response = await fetch("/api/publish", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     projectId,
-                    code,
+                    code: codeToPublish,
                 }),
             });
 
@@ -121,7 +160,7 @@ export function ShareDialog({ open, onOpenChange, projectId, code }: ShareDialog
                         </p>
                         <Button
                             onClick={handlePublish}
-                            disabled={isPublishing || !code}
+                            disabled={isPublishing}
                             className="w-full"
                         >
                             {isPublishing ? (
@@ -136,11 +175,6 @@ export function ShareDialog({ open, onOpenChange, projectId, code }: ShareDialog
                                 </>
                             )}
                         </Button>
-                        {!code && (
-                            <p className="text-xs text-zinc-500 text-center">
-                                请先生成一些代码内容
-                            </p>
-                        )}
                     </div>
                 ) : (
                     <div className="flex flex-col gap-4 py-4">
