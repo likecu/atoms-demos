@@ -28,6 +28,9 @@ export async function POST(request: NextRequest) {
         const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
         if (authError || !user) {
+            console.error("[API] Publish Auth Failed:", authError);
+            const cookieStore = await cookies();
+            console.log("[API] Cookies present:", cookieStore.getAll().map(c => c.name));
             return NextResponse.json(
                 { error: "请先登录" },
                 { status: 401 }
