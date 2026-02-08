@@ -111,10 +111,28 @@ export default function ChatArea() {
     useEffect(() => {
         const lastMessage = messages[messages.length - 1];
         if (lastMessage && lastMessage.role === 'assistant') {
-            const textPart = lastMessage.parts.find((part: { type: string }) => part.type === 'text');
+            // Priority 1: Check for code blocks in text
+            const textPart = lastMessage.parts.find((part: any) => part.type === 'text');
             const content = textPart && 'text' in textPart ? (textPart as { text: string }).text : '';
+
+            let codeFound = false;
             if (content) {
-                parseAndSet(content, setCode);
+                codeFound = parseAndSet(content, setCode);
+            }
+
+            // Priority 2: If no code block in text, check for writeFile tool usage
+            if (!codeFound) {
+                const toolInvocationPart = lastMessage.parts.find((part: any) => part.type === 'tool-invocation');
+                if (toolInvocationPart && 'toolInvocation' in toolInvocationPart) {
+                    const toolInvocation = (toolInvocationPart as any).toolInvocation;
+                    if (toolInvocation.toolName === 'writeFile' && toolInvocation.args) {
+                        const { path, content } = toolInvocation.args;
+                        if (content && typeof content === 'string') {
+                            console.log('[ChatArea] Found code in writeFile tool:', path);
+                            setCode(content);
+                        }
+                    }
+                }
             }
         }
     }, [messages, setCode, parseAndSet]);

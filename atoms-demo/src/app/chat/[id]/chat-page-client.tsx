@@ -642,7 +642,7 @@ function ChatPageContent({
                                         defaultWidth="100%"
                                         defaultHeight="100%"
                                     >
-                                        <SandpackPreview />
+                                        <SandpackPreview projectId={projectId} />
                                     </DraggableCanvas>
                                 )}
 

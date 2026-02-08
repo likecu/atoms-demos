@@ -47,21 +47,60 @@ rsync -avz --progress \
 echo "步骤 3: 上传环境配置文件..."
 scp -i $SSH_KEY $LOCAL_DIR/.env.production $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/.env
 
-echo "=========================================="
-echo "✅ 代码上传完成!"
-echo "=========================================="
+# 4. 上传 Sandbox Dockerfile
+echo "步骤 4: 上传 Sandbox Dockerfile..."
+scp -i $SSH_KEY $LOCAL_DIR/src/lib/sandbox/Dockerfile $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/sandbox.Dockerfile
+
+# 5. 远程执行构建和部署
+echo "步骤 5: 远程执行构建和部署..."
+echo "正在连接远程服务器..."
+
+# 使用 heredoc 传递多行命令
+ssh -i $SSH_KEY $REMOTE_USER@$REMOTE_HOST << 'ENDSSH'
+  set -e
+  cd /home/milk/atoms-demo
+
+  echo "------------------------------------------"
+  echo "🔍 检查并构建 Sandbox 镜像 (atoms-sandbox:latest)..."
+  # 检查镜像是否存在，不存在或强制更新时构建
+  if [[ "$(docker images -q atoms-sandbox:latest 2> /dev/null)" == "" ]]; then
+    echo "镜像不存在，开始构建..."
+    docker build -f sandbox.Dockerfile -t atoms-sandbox:latest .
+  else
+    echo "镜像已存在，跳过构建 (如需更新请手动运行构建命令)"
+  fi
+
+  echo "------------------------------------------"
+  echo "📂 配置 Workspaces 目录..."
+  mkdir -p workspaces
+  
+  echo "设置 workspaces 权限 (UID 1001)..."
+  # 尝试使用 sudo 设置权限，如果需要密码可能会在此处暂停或失败
+  # 如果配置了 NOPASSWD 则会自动执行
+  if sudo -n true 2>/dev/null; then
+      sudo chown -R 1001:1001 workspaces
+      sudo chmod -R 775 workspaces
+  else
+      echo "⚠️ 注意: 无免密 sudo 权限，尝试使用当前用户权限设置..."
+      # 如果无法 sudo，尝试宽松权限
+      chmod -R 777 workspaces || true
+  fi
+
+  echo "------------------------------------------"
+  echo "🚀 启动应用..."
+  # 重新构建应用镜像并启动
+  docker-compose up -d --build --remove-orphans
+
+  echo "------------------------------------------"
+  echo "🧹 清理..."
+  docker image prune -f
+
+  echo "=========================================="
+  echo "✅ 远程部署成功完成!"
+  echo "=========================================="
+  docker-compose ps
+ENDSSH
+
 echo ""
-echo "下一步:"
-echo "1. SSH 登录到远程服务器:"
-echo "   ssh -i ~/.ssh/milk milk@34.72.125.220"
-echo ""
-echo "2. 进入项目目录:"
-echo "   cd /home/milk/atoms-demo"
-echo ""
-echo "3. 构建并启动应用:"
-echo "   docker-compose build"
-echo "   docker-compose up -d"
-echo ""
-echo "4. 查看日志:"
-echo "   docker-compose logs -f app"
-echo "=========================================="
+echo "部署脚本执行完毕。应用地址: http://$REMOTE_HOST:3000"
+
