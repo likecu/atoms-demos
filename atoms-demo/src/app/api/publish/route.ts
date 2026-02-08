@@ -22,113 +22,113 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 获取当前用户会话
-        const cookieStore = await cookies();
-        const sessionCookie = cookieStore.get("session");
+        import { createServerSupabaseClient } from "@/lib/supabase-server";
 
-        if (!sessionCookie) {
-            return NextResponse.json(
-                { error: "请先登录" },
-                { status: 401 }
-            );
-        }
+        // ...
 
-        let session;
-        try {
-            session = JSON.parse(sessionCookie.value);
-        } catch {
-            return NextResponse.json(
-                { error: "会话无效，请重新登录" },
-                { status: 401 }
-            );
-        }
+        export async function POST(request: NextRequest) {
+            try {
+                const { projectId, code } = await request.json();
 
-        const userId = session.id;
-        if (!userId) {
-            return NextResponse.json(
-                { error: "用户信息无效" },
-                { status: 401 }
-            );
-        }
+                // 验证必需参数
+                if (!code) {
+                    return NextResponse.json(
+                        { error: "代码内容不能为空" },
+                        { status: 400 }
+                    );
+                }
 
-        // 创建 Supabase 客户端 (使用 service role key 绕过 RLS)
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+                // 获取当前用户会话
+                const supabaseClient = await createServerSupabaseClient();
+                const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
-        if (!supabaseUrl || !supabaseServiceKey) {
-            console.error("Supabase 配置缺失");
-            return NextResponse.json(
-                { error: "服务器配置错误" },
-                { status: 500 }
-            );
-        }
+                if (authError || !user) {
+                    return NextResponse.json(
+                        { error: "请先登录" },
+                        { status: 401 }
+                    );
+                }
 
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+                const userId = user.id;
 
-        // 生成唯一的 share_token (32 字符十六进制)
-        const shareToken = randomBytes(16).toString("hex");
+                // 创建 Supabase 客户端 (使用 service role key 绕过 RLS)
+                const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+                const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-        // 如果没有 projectId，创建一个默认项目
-        let finalProjectId = projectId;
-        if (!finalProjectId) {
-            const { data: newProject, error: projectError } = await supabase
-                .from("projects")
-                .insert({
-                    user_id: userId,
-                    name: "Published Project",
-                    current_code: code,
-                    status: "published",
-                })
-                .select("id")
-                .single();
+                if (!supabaseUrl || !supabaseServiceKey) {
+                    console.error("Supabase 配置缺失");
+                    return NextResponse.json(
+                        { error: "服务器配置错误" },
+                        { status: 500 }
+                    );
+                }
 
-            if (projectError) {
-                console.error("创建项目失败:", projectError);
+                const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+                // 生成唯一的 share_token (32 字符十六进制)
+                const shareToken = randomBytes(16).toString("hex");
+
+                // 如果没有 projectId，创建一个默认项目
+                let finalProjectId = projectId;
+                if (!finalProjectId) {
+                    const { data: newProject, error: projectError } = await supabase
+                        .from("projects")
+                        .insert({
+                            user_id: userId,
+                            name: "Published Project",
+                            current_code: code,
+                            status: "published",
+                        })
+                        .select("id")
+                        .single();
+
+                    if (projectError) {
+                        console.error("创建项目失败:", projectError);
+                        return NextResponse.json(
+                            { error: "创建项目失败" },
+                            { status: 500 }
+                        );
+                    }
+                    finalProjectId = newProject.id;
+                }
+
+                // 插入 deployment 记录
+                const { data: deployment, error: deploymentError } = await supabase
+                    .from("deployments")
+                    .insert({
+                        project_id: finalProjectId,
+                        user_id: userId,
+                        share_token: shareToken,
+                        snapshot_code: code,
+                        is_active: true,
+                    })
+                    .select()
+                    .single();
+
+                if (deploymentError) {
+                    console.error("创建部署记录失败:", deploymentError);
+                    return NextResponse.json(
+                        { error: "发布失败，请重试" },
+                        { status: 500 }
+                    );
+                }
+
+                // 构建分享链接
+                const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+                const shareUrl = `${origin}/share/${shareToken}`;
+
+                return NextResponse.json({
+                    success: true,
+                    shareUrl,
+                    token: shareToken,
+                    deploymentId: deployment.id,
+                });
+
+            } catch (error) {
+                console.error("发布接口错误:", error);
                 return NextResponse.json(
-                    { error: "创建项目失败" },
+                    { error: "服务器错误" },
                     { status: 500 }
                 );
             }
-            finalProjectId = newProject.id;
         }
-
-        // 插入 deployment 记录
-        const { data: deployment, error: deploymentError } = await supabase
-            .from("deployments")
-            .insert({
-                project_id: finalProjectId,
-                user_id: userId,
-                share_token: shareToken,
-                snapshot_code: code,
-                is_active: true,
-            })
-            .select()
-            .single();
-
-        if (deploymentError) {
-            console.error("创建部署记录失败:", deploymentError);
-            return NextResponse.json(
-                { error: "发布失败，请重试" },
-                { status: 500 }
-            );
-        }
-
-        // 构建分享链接
-        const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-        const shareUrl = `${origin}/share/${shareToken}`;
-
-        return NextResponse.json({
-            success: true,
-            shareUrl,
-            token: shareToken,
-            deploymentId: deployment.id,
-        });
-
-    } catch (error) {
-        console.error("发布接口错误:", error);
-        return NextResponse.json(
-            { error: "服务器错误" },
-            { status: 500 }
-        );
-    }
-}
