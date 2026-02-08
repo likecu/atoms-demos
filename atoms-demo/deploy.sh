@@ -87,9 +87,38 @@ ssh -i $SSH_KEY $REMOTE_USER@$REMOTE_HOST << 'ENDSSH'
   fi
 
   echo "------------------------------------------"
+  echo "🔧 检查和加载环境变量..."
+  
+  # 检查 .env 文件是否存在
+  if [ ! -f .env ]; then
+    echo "❌ 错误: .env 文件不存在"
+    exit 1
+  fi
+  
+  # 显示关键环境变量（隐藏敏感值）
+  echo "验证环境变量配置:"
+  if grep -q "NEXT_PUBLIC_SUPABASE_URL" .env; then
+    echo "✓ NEXT_PUBLIC_SUPABASE_URL: $(grep NEXT_PUBLIC_SUPABASE_URL .env | cut -d'=' -f2 | head -c 30)..."
+  else
+    echo "❌ NEXT_PUBLIC_SUPABASE_URL 未配置"
+  fi
+  
+  if grep -q "OPENROUTER_API_KEY" .env; then
+    echo "✓ OPENROUTER_API_KEY: $(grep OPENROUTER_API_KEY .env | cut -d'=' -f2 | head -c 20)..."
+  else
+    echo "❌ OPENROUTER_API_KEY 未配置"
+  fi
+  
+  echo "------------------------------------------"
   echo "🚀 启动应用..."
-  # 重新构建应用镜像并启动
-  docker-compose up -d --build --remove-orphans
+  # 停止旧容器
+  docker-compose down || true
+  
+  # 重新构建应用镜像（使用 .env 文件中的变量）
+  docker-compose build --no-cache app
+  
+  # 启动容器
+  docker-compose up -d --remove-orphans
 
   echo "------------------------------------------"
   echo "🧹 清理..."
