@@ -91,18 +91,13 @@ export default function SandpackPreview({ projectId }: SandpackPreviewProps) {
         // 构建 Sandpack 文件结构
         const sandpackFiles: Record<string, string | { code: string; hidden?: boolean }> = {};
 
-        if (wsProjectType === 'html' && wsFiles['index.html']) {
-            // HTML 项目
-            sandpackFiles["/index.html"] = wsFiles['index.html'];
-
-            // 如果有引用的 JS/JSX 文件，也添加进来
+        if (wsProjectType === 'html') {
+            // HTML 项目 - 保持原有逻辑，但支持更多文件
             for (const [filePath, content] of Object.entries(wsFiles)) {
-                if (filePath !== 'index.html' && (filePath.endsWith('.js') || filePath.endsWith('.jsx'))) {
-                    sandpackFiles[`/${filePath}`] = content;
-                }
+                sandpackFiles[`/${filePath}`] = content;
             }
 
-            // 添加 package.json
+            // 添加 package.json 如果不存在
             if (!wsFiles['package.json']) {
                 sandpackFiles["/package.json"] = {
                     code: JSON.stringify({
@@ -114,21 +109,91 @@ export default function SandpackPreview({ projectId }: SandpackPreviewProps) {
                 };
             }
         } else if (wsProjectType === 'react') {
-            // React 项目
-            const appFile = wsFiles['src/App.jsx'] || wsFiles['src/App.tsx'] || wsFiles['App.jsx'] || wsFiles['App.tsx'];
-            if (appFile) {
-                sandpackFiles["/App.js"] = appFile;
+            // React 项目 - 动态映射所有文件
+            for (const [filePath, content] of Object.entries(wsFiles)) {
+                // 如果是 package.json，我们需要确保它包含 react 依赖
+                if (filePath === 'package.json') {
+                    try {
+                        const pkg = JSON.parse(content);
+                        const dependencies = pkg.dependencies || {};
+                        const devDependencies = pkg.devDependencies || {};
+
+                        // 检查是否缺失关键依赖
+                        const hasReact = dependencies['react'] || devDependencies['react'];
+                        const hasReactDOM = dependencies['react-dom'] || devDependencies['react-dom'];
+
+                        if (!hasReact || !hasReactDOM) {
+                            // 混合原有依赖和 React 依赖
+                            pkg.dependencies = {
+                                ...dependencies,
+                                "react": dependencies['react'] || "^18.2.0",
+                                "react-dom": dependencies['react-dom'] || "^18.2.0",
+                                "react-scripts": "5.0.1" // 添加 react-scripts 以防万一
+                            };
+                            sandpackFiles[`/${filePath}`] = JSON.stringify(pkg, null, 2);
+                        } else {
+                            sandpackFiles[`/${filePath}`] = content;
+                        }
+                    } catch (e) {
+                        // 解析失败，使用原始内容（虽然可能还是坏的）
+                        console.error("Failed to parse user package.json", e);
+                        sandpackFiles[`/${filePath}`] = content;
+                    }
+                } else {
+                    sandpackFiles[`/${filePath}`] = content;
+                }
             }
 
-            // 添加标准的 React 入口文件
-            sandpackFiles["/index.js"] = {
-                code: `import React, { StrictMode } from "react";
+            // 如果没有 package.json，创建一个默认的
+            if (!sandpackFiles['/package.json']) {
+                sandpackFiles["/package.json"] = {
+                    code: JSON.stringify({
+                        "name": "react-app",
+                        "version": "1.0.0",
+                        "main": "/index.js",
+                        "dependencies": {
+                            "react": "^18.2.0",
+                            "react-dom": "^18.2.0",
+                            "lucide-react": "latest",
+                            "recharts": "latest",
+                            "framer-motion": "latest",
+                            "clsx": "latest",
+                            "tailwind-merge": "latest"
+                        }
+                    }),
+                    hidden: true
+                };
+            }
+
+            // 查找入口文件
+            const entryFiles = ['src/index.jsx', 'src/index.tsx', 'src/main.jsx', 'src/main.tsx', 'index.jsx', 'index.tsx'];
+            const foundEntry = entryFiles.find(f => wsFiles[f]);
+
+            // 如果找到入口文件，创建引导 index.js
+            if (foundEntry) {
+                // Sandpack 默认入口是 /index.js，我们需要它引用用户的入口
+                if (!sandpackFiles['/index.js']) {
+                    sandpackFiles["/index.js"] = {
+                        code: `import "./${foundEntry}";`,
+                        hidden: true
+                    };
+                }
+            } else {
+                // 如果没有找到显式入口，尝试查找 App 组件并使用旧逻辑封装
+                const appFile = wsFiles['src/App.jsx'] || wsFiles['src/App.tsx'] || wsFiles['App.jsx'] || wsFiles['App.tsx'];
+                const appPath = wsFiles['src/App.jsx'] ? './src/App' :
+                    wsFiles['src/App.tsx'] ? './src/App' :
+                        wsFiles['App.jsx'] ? './App' : './App';
+
+                if (appFile) {
+                    sandpackFiles["/index.js"] = {
+                        code: `import React, { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 window.print = () => { console.log("Print blocked in preview"); };
 
-import App from "./App";
+import App from "${appPath}";
 
 const root = createRoot(document.getElementById("root"));
 root.render(
@@ -136,11 +201,15 @@ root.render(
     <App />
   </StrictMode>
 );`,
-                hidden: true
-            };
+                        hidden: true
+                    };
+                }
+            }
 
-            sandpackFiles["/styles.css"] = {
-                code: `body {
+            // 确保有 styles.css (如果用户没提供)
+            if (!sandpackFiles['/styles.css'] && !sandpackFiles['/src/styles.css'] && !sandpackFiles['/src/index.css']) {
+                sandpackFiles["/styles.css"] = {
+                    code: `body {
   font-family: sans-serif;
   -webkit-font-smoothing: auto;
   -moz-font-smoothing: auto;
@@ -155,8 +224,9 @@ root.render(
 * {
   box-sizing: border-box;
 }`,
-                hidden: true
-            };
+                    hidden: true
+                };
+            }
         }
 
         return (

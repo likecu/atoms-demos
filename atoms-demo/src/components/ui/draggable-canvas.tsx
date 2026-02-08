@@ -36,6 +36,7 @@ export function DraggableCanvas({
     // 状态
     const [isSpacePressed, setIsSpacePressed] = useState(false)
     const [isDragging, setIsDragging] = useState(false)
+    const [isDragMode, setIsDragMode] = useState(false) // 新增：手动拖拽模式
     const [scale, setScale] = useState(initialScale)
 
     // 监听空格键
@@ -103,6 +104,8 @@ export function DraggableCanvas({
         setScale(initialScale)
     }
 
+    const isInteractionEnabled = isSpacePressed || isDragMode
+
     return (
         <div
             ref={containerRef}
@@ -116,13 +119,13 @@ export function DraggableCanvas({
         >
             {/* 状态指示器与提示 */}
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-2">
-                {isSpacePressed && (
+                {(isSpacePressed || isDragMode) && (
                     <div className="bg-indigo-600/90 backdrop-blur-sm text-white px-4 py-1.5 rounded-full text-sm font-medium shadow-lg flex items-center gap-2 animate-in fade-in zoom-in duration-200">
                         <Move className="w-4 h-4" />
                         拖拽模式
                     </div>
                 )}
-                {!isDragging && !isSpacePressed && (
+                {!isDragging && !isSpacePressed && !isDragMode && (
                     <div className="bg-zinc-800/50 backdrop-blur-sm text-zinc-400 px-3 py-1 rounded-full text-xs border border-zinc-700/50 opacity-0 hover:opacity-100 transition-opacity duration-300">
                         按住空格键拖拽 • Ctrl+滚轮缩放
                     </div>
@@ -131,6 +134,21 @@ export function DraggableCanvas({
 
             {/* 控制栏 */}
             <div className="absolute bottom-6 right-6 z-50 flex items-center gap-2 bg-zinc-900/90 p-1.5 rounded-xl border border-zinc-800 shadow-2xl backdrop-blur-md">
+                <Button
+                    variant={isDragMode ? "secondary" : "ghost"}
+                    size="icon"
+                    className={cn(
+                        "h-8 w-8 hover:bg-zinc-800 text-zinc-400 hover:text-white",
+                        isDragMode && "bg-indigo-600 text-white hover:bg-indigo-700 hover:text-white"
+                    )}
+                    onClick={() => setIsDragMode(!isDragMode)}
+                    title={isDragMode ? "退出拖拽模式" : "拖拽模式 (空格键)"}
+                >
+                    <Hand className="w-4 h-4" />
+                </Button>
+
+                <div className="w-px h-4 bg-zinc-700 mx-1" />
+
                 <Button
                     variant="ghost"
                     size="icon"
@@ -169,14 +187,15 @@ export function DraggableCanvas({
             {/* 可拖拽区域 */}
             <motion.div
                 className="w-full h-full flex items-center justify-center cursor-default"
-                // 只有按住空格键时才启用拖拽
-                drag={isSpacePressed}
-                dragConstraints={containerRef}
+                // 只有按住空格键或启用手动拖拽模式时才启用拖拽
+                drag={isInteractionEnabled}
+                // allow dragging outside constraint
+                // dragConstraints={containerRef} 
                 dragElastic={0.1}
                 dragMomentum={false}
                 onDragStart={() => setIsDragging(true)}
                 onDragEnd={() => setIsDragging(false)}
-                style={{ x, y, cursor: isSpacePressed ? 'grab' : 'default' }}
+                style={{ x, y, cursor: isInteractionEnabled ? 'grab' : 'default' }}
                 whileDrag={{ cursor: 'grabbing' }}
             >
                 {/* 缩放容器 */}
@@ -191,13 +210,13 @@ export function DraggableCanvas({
                 >
                     {/* 
                         交互遮罩层 
-                        当 Space 按下时：pointer-events-auto，拦截所有鼠标事件，使得 motion.div 可以响应拖拽。
+                        当 Space 按下或拖拽模式开启时：pointer-events-auto，拦截所有鼠标事件，使得 motion.div 可以响应拖拽。
                         否则：pointer-events-none，使得鼠标事件可以穿透到内部的 iframe/编辑器。
                     */}
                     <div
                         className={cn(
                             "absolute inset-0 z-50 transition-colors",
-                            isSpacePressed ? "bg-transparent pointer-events-auto" : "pointer-events-none"
+                            isInteractionEnabled ? "bg-transparent pointer-events-auto" : "pointer-events-none"
                         )}
                     />
 

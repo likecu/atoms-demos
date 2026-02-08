@@ -9,6 +9,10 @@ import { cookies } from 'next/headers'
  * @returns Supabase 客户端实例
  */
 export async function createServerSupabaseClient() {
+    console.log("[Debug] Supabase Init - Env:", {
+        url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    });
     const cookieStore = await cookies()
 
     return createServerClient(

@@ -103,6 +103,9 @@ export class SandboxManager {
         }
     }
 
+    // Limit max concurrent sandboxes
+    private readonly MAX_SANDBOXES = 5;
+
     /**
      * Get or create a sandbox container for the user
      */
@@ -127,6 +130,9 @@ export class SandboxManager {
             return container;
         }
 
+        // Check strict limit before creating new one
+        await this.enforceSandboxLimit();
+
         // Calculate HOST path for binding
         const hostWorkspacePath = path.join(SANDBOX_CONFIG.HOST_WORKSPACES_DIR, userId);
 
@@ -148,6 +154,58 @@ export class SandboxManager {
 
         await container.start();
         return container;
+    }
+
+    /**
+     * Enforce the sandbox limit by stopping the least recently used container
+     */
+    private async enforceSandboxLimit(): Promise<void> {
+        const containers = await docker.listContainers({
+            all: true,
+            filters: { name: ['sandbox-'] },
+        });
+
+        // Filter only running containers or all? Ideally running. 
+        // But listContainers with all: true returns all.
+        // We only care about active ones consuming resources or slots.
+        // Let's count all 'sandbox-*' containers as occupying a slot.
+        const activeSandboxes = containers.filter(c => c.Names.some(n => n.includes('sandbox-')));
+
+        if (activeSandboxes.length < this.MAX_SANDBOXES) {
+            return;
+        }
+
+        console.log(`[Sandbox] Limit reached (${activeSandboxes.length}/${this.MAX_SANDBOXES}). Evicting LRU...`);
+
+        // Sort by last activity
+        // If no activity recorded (e.g. after restart), treat as oldest (0)
+        const sorted = activeSandboxes.sort((a, b) => {
+            const userIdA = this.getUserIdFromContainerName(a.Names[0]);
+            const userIdB = this.getUserIdFromContainerName(b.Names[0]);
+            const timeA = this.lastActivity.get(userIdA) || 0;
+            const timeB = this.lastActivity.get(userIdB) || 0;
+            return timeA - timeB; // Ascending: oldest first
+        });
+
+        // Kill the oldest
+        // Note: We might be killing the one we're about to create if we're not careful, 
+        // but getOrCreateSandbox checks if *this* user's container exists first.
+        // So we are safe to kill the oldest from the list.
+        if (sorted.length > 0) {
+            const victim = sorted[0];
+            const victimUserId = this.getUserIdFromContainerName(victim.Names[0]);
+            if (victimUserId) {
+                console.log(`[Sandbox] Evicting sandbox for user ${victimUserId}`);
+                await this.stopSandbox(victimUserId);
+            }
+        }
+    }
+
+    private getUserIdFromContainerName(containerName: string): string {
+        // Name format: /sandbox-{userId}
+        // dockerode returns names with leading slash
+        const name = containerName.replace(/^\//, '');
+        return name.replace('sandbox-', '');
     }
 
     /**
