@@ -21,21 +21,4 @@ services:
       - SANDBOX_HOST_DIR=/home/milk/atoms-demo/workspaces
     restart: unless-stopped
 
-  # Supabase 本地开发环境（可选）
-  supabase:
-    image: supabase/supabase:latest
-    ports:
-      - "54321:54321"
-      - "54323:54323"
-      - "54324:54324"
-    environment:
-      - POSTGRES_PASSWORD=your-password
-      - JWT_SECRET=your-jwt-secret
-      - ANON_KEY=your-anon-key
-      - SERVICE_KEY=your-service-key
-    volumes:
-      - supabase_data:/var/lib/postgresql/data
-      - ./supabase/schema.sql:/docker-entrypoint-initdb.d/schema.sql
 
-volumes:
-  supabase_data:
