@@ -5,7 +5,8 @@ import { SANDBOX_CONFIG } from './config';
 
 // Initialize Docker client
 // On Mac/Linux, this usually works with default socket
-const docker = new Docker();
+// Specify API version to match host Docker (20.10.24, API 1.41)
+const docker = new Docker({ version: 'v1.41' });
 
 export class SandboxManager {
     private static instance: SandboxManager;

@@ -7,11 +7,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 
-const LOG_FILE = path.join(process.cwd(), 'debug_chat.log');
-
 function log(message: string) {
   const time = new Date().toISOString();
-  fs.appendFileSync(LOG_FILE, `[${time}] ${message}\n`);
+  console.log(`[${time}] ${message}`);
 }
 
 /**
@@ -260,13 +258,35 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
       messages: messages,
       tools: effectiveTools,
 
-      // 智能停止条件: AI自然完成或达到100步上限
+      // 智能停止条件: AI自然完成、达到步数上限或检测到循环
       stopWhen: (steps: any) => {
-        // handle case where steps might be passed as object or array depending on version
         const stepsArray = Array.isArray(steps) ? steps : (steps as any).steps;
-        if (!stepsArray) return true;
+        if (!stepsArray || stepsArray.length === 0) return false;
+
         const lastStep = stepsArray[stepsArray.length - 1];
-        return lastStep?.finishReason === 'stop' || stepsArray.length >= 50;
+        // 自然停止
+        if (lastStep?.finishReason === 'stop') return true;
+
+        // 步数限制
+        if (stepsArray.length >= 30) {
+          console.warn(`${prefix} Reached maximum steps (30), forcing stop`);
+          return true;
+        }
+
+        // 检测循环: 最近5步都调用相同工具
+        if (stepsArray.length >= 10) {
+          const recentSteps = stepsArray.slice(-5);
+          const toolNames = recentSteps
+            .map((s: any) => s.toolCalls?.map((t: any) => t.toolName).join(','))
+            .filter((n: string) => n);
+
+          if (toolNames.length >= 5 && toolNames.every((n: string) => n === toolNames[0])) {
+            console.warn(`${prefix} Detected loop, forcing stop`);
+            return true;
+          }
+        }
+
+        return false;
       },
 
       onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {

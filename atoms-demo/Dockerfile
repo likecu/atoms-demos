@@ -28,13 +28,20 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN addgroup --system --gid 1001 nodejs
+# 先创建 docker 组 (GID 1001,与宿主机 docker socket 匹配)
+RUN addgroup -g 1001 docker
+
+# 创建 nextjs 用户并加入 docker 组
 RUN adduser --system --uid 1001 nextjs
+RUN adduser nextjs docker
 
 COPY --from=builder /app/public ./public
 
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:docker /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:docker /app/.next/static ./.next/static
+
+# 创建必要的目录并设置权限
+RUN mkdir -p /app/workspaces && chown nextjs:docker /app/workspaces
 
 USER nextjs
 
