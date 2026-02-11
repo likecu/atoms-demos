@@ -11,8 +11,7 @@ export const loginSchema = z.object({
         .string()
         .min(1, "用户名不能为空")
         .min(3, "用户名至少3个字符")
-        .max(20, "用户名最多20个字符")
-        .regex(/^[a-zA-Z0-9_]+$/, "用户名只能包含字母、数字和下划线"),
+        .max(50, "用户名最多50个字符"), // Increased max length for emails
     password: z
         .string()
         .min(1, "密码不能为空")
@@ -29,8 +28,7 @@ export const signupSchema = z
             .string()
             .min(1, "用户名不能为空")
             .min(3, "用户名至少3个字符")
-            .max(20, "用户名最多20个字符")
-            .regex(/^[a-zA-Z0-9_]+$/, "用户名只能包含字母、数字和下划线"),
+            .max(50, "用户名最多50个字符"), // Increased max length for emails
         password: z
             .string()
             .min(1, "密码不能为空")

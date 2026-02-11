@@ -85,12 +85,16 @@ export async function POST(request: NextRequest) {
       }
     )
 
+    // 检查用户名是否为邮箱格式
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username)
+    const finalEmail = email || (isEmail ? username : `${username}@atoms.demo`)
+
     // 使用 Supabase Auth 注册
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email: email || `${username}@atoms.demo`,
+      email: finalEmail,
       password,
       user_metadata: {
-        username,
+        username, // 仍然保存原始用户名输入（可能是邮箱，也可能是普通用户名）
       },
       email_confirm: true
     })
@@ -118,7 +122,7 @@ export async function POST(request: NextRequest) {
         id: data.user?.id,
         username,
         password, // 注意：这里存储明文/原始密码是因为 schema 要求，实际生产环境不建议这样
-        email: email || `${username}@atoms.demo`,
+        email: finalEmail,
         avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
