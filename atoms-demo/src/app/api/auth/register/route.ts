@@ -65,6 +65,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { username, password, email } = body
 
+    console.log('Register Request:', { username, emailInput: email, passwordProvided: !!password })
+
     // 极简校验：只检查非空
     if (!username || !password) {
       return NextResponse.json(
@@ -89,6 +91,8 @@ export async function POST(request: NextRequest) {
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username)
     const finalEmail = email || (isEmail ? username : `${username}@atoms.demo`)
 
+    console.log('Register Processing:', { isEmail, finalEmail, username })
+
     // 使用 Supabase Auth 注册
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email: finalEmail,
@@ -102,6 +106,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       // 如果是用户名已存在等错误，返回友好提示
       if (error.message.includes('already registered') || error.message.includes('duplicate')) {
+        console.error('注册错误 (Duplicate):', error)
         return NextResponse.json(
           { error: '用户名已被注册，请尝试其他用户名' },
           { status: 400 }

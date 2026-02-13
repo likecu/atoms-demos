@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 
 /**
@@ -42,23 +43,61 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { username, password } = body
+    const { username, password, email } = body
 
     // 极简校验：只检查非空
-    if (!username || !password) {
+    if ((!username && !email) || !password) {
       return NextResponse.json(
-        { error: '用户名和密码不能为空' },
+        { error: '账号和密码不能为空' },
         { status: 400 }
       )
     }
 
-    // 检查用户名是否为邮箱格式
-    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username)
-    const finalEmail = isEmail ? username : `${username}@atoms.demo`
+    let targetEmail = email
+
+    // 如果没有提供 email，则根据 username 推断或查找
+    if (!targetEmail) {
+      if (!username) {
+        return NextResponse.json({ error: '需提供用户名或邮箱' }, { status: 400 })
+      }
+
+      // 检查用户名是否为邮箱格式
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username)
+
+      if (isEmail) {
+        targetEmail = username
+      } else {
+        // 尝试通过用户名查找邮箱
+        // 使用 Admin Client 查询 users 表
+        const supabaseAdmin = createSupabaseClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          {
+            auth: {
+              autoRefreshToken: false,
+              persistSession: false
+            }
+          }
+        )
+
+        const { data: userRecord } = await supabaseAdmin
+          .from('users')
+          .select('email')
+          .eq('username', username)
+          .single()
+
+        if (userRecord && userRecord.email) {
+          targetEmail = userRecord.email
+        } else {
+          // 回退到默认构造逻辑
+          targetEmail = `${username}@atoms.demo`
+        }
+      }
+    }
 
     // 使用 Supabase Auth 登录
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: finalEmail,
+      email: targetEmail,
       password,
     })
 
@@ -71,7 +110,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 检查并修复 public.users 数据（如果缺失）
-    // 这是为了修复之前注册流程不完整导致的遗留数据
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
@@ -80,14 +118,20 @@ export async function POST(request: NextRequest) {
 
     if (!existingUser && data.user) {
       console.log('检测到用户数据缺失，尝试自动修复:', data.user.id)
+      // 尝试获取用户名（如果 login 是用 email）
+      let finalUsername = username
+      if (!finalUsername && data.user.email) {
+        finalUsername = data.user.email.split('@')[0]
+      }
+
       const { error: healError } = await supabase
         .from('users')
         .insert({
           id: data.user.id,
-          username,
-          password, // 同样存储明文/原始密码以符合当前 schema
-          email: finalEmail,
-          avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+          username: finalUsername || 'user',
+          password,
+          email: targetEmail,
+          avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${finalUsername || 'user'}`,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })

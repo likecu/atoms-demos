@@ -298,17 +298,44 @@ export class SandboxManager {
     /**
      * List files with detailed stats (name, isDirectory)
      */
+    /**
+     * List files with detailed stats (name, isDirectory) recursively
+     */
     async listFilesDetailed(userId: string, subPath: string = ''): Promise<{ name: string; isDirectory: boolean }[]> {
         this.updateActivity(userId);
-        const workspacePath = path.join(SANDBOX_CONFIG.LOCAL_WORKSPACES_DIR, userId, subPath);
+        const workspacePath = path.join(SANDBOX_CONFIG.LOCAL_WORKSPACES_DIR, userId);
+        const targetPath = path.join(workspacePath, subPath);
+
+        const results: { name: string; isDirectory: boolean }[] = [];
+
         try {
-            const entries = await fs.readdir(workspacePath, { withFileTypes: true });
-            return entries.map(entry => ({
-                name: entry.name,
-                isDirectory: entry.isDirectory()
-            }));
+            // Helper function for recursion
+            const walk = async (currentPath: string) => {
+                const entries = await fs.readdir(currentPath, { withFileTypes: true });
+                for (const entry of entries) {
+                    const fullPath = path.join(currentPath, entry.name);
+                    const relativePath = path.relative(workspacePath, fullPath); // Relative to workspace root
+
+                    // Skip hidden files/dirs like .git, node_modules if needed (optional based on requirements)
+                    // For now, list everything as the original did, but recursive.
+                    // Maybe skip .git and node_modules for performance?
+                    if (entry.name === '.git' || entry.name === 'node_modules') continue;
+
+                    results.push({
+                        name: relativePath,
+                        isDirectory: entry.isDirectory()
+                    });
+
+                    if (entry.isDirectory()) {
+                        await walk(fullPath);
+                    }
+                }
+            };
+
+            await walk(targetPath);
+            return results;
         } catch (e) {
-            console.error(`Failed to list files detailed for ${userId}:`, e);
+            console.error(`Failed to list files detailed recursively for ${userId}:`, e);
             throw e;
         }
     }

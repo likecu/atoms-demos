@@ -85,7 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(data.error || "注册失败");
       }
 
-      setUser(data.user);
+      // 注册成功后自动登录，以获取 Session Cookie
+      await login(username, password);
     } finally {
       setLoading(false);
     }
