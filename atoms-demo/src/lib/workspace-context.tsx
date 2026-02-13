@@ -61,7 +61,7 @@ type Action =
 // --- Reducer ---
 
 const initialState: WorkspaceState = {
-    mode: 'PLANNING', // Default to planning/orchestration
+    mode: 'EDITING', // Default to code editing
     agents: [],
     fileTree: [],
     activeFileId: null,
