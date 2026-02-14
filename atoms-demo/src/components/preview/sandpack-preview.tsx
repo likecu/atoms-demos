@@ -223,7 +223,28 @@ export default function SandpackPreview({ projectId }: SandpackPreviewProps) {
         */
 
         // Return null or fallback if we reach here (shouldn't for react type)
-        return null;
+        // Fallback for undefined project type (e.g. only python files or no entry point)
+        return (
+            <div className="h-full w-full flex items-center justify-center bg-zinc-900 text-zinc-500">
+                <div className="text-center max-w-md px-4">
+                    <p className="text-sm font-medium text-zinc-400">无法预览当前文件</p>
+                    <p className="text-xs text-zinc-600 mt-2">
+                        未检测到 index.html 或 React 入口文件。<br />
+                        AI 可能会创建 Python 脚本或其他无法在浏览器直接运行的文件。<br />
+                        建议要求 AI "创建一个 index.html" 来启用可视化预览。
+                    </p>
+                    <div className="mt-4 text-left bg-zinc-950 p-4 rounded-lg text-xs text-zinc-500 overflow-auto max-h-40 border border-zinc-800">
+                        <p className="mb-1 font-semibold">已检测到的文件:</p>
+                        <ul className="list-disc list-inside">
+                            {Object.keys(wsFiles).slice(0, 5).map(f => (
+                                <li key={f}>{f}</li>
+                            ))}
+                            {Object.keys(wsFiles).length > 5 && <li>...</li>}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     // 回退逻辑：使用 code 状态（原有逻辑）
