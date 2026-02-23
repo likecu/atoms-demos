@@ -74,6 +74,57 @@ scp -i $SSH_KEY $LOCAL_DIR/.env.production $REMOTE_USER@$REMOTE_HOST:$DEPLOY_DIR
 echo "步骤 4: 准备 Sandbox Dockerfile..."
 scp -i $SSH_KEY $LOCAL_DIR/src/lib/sandbox/Dockerfile $REMOTE_USER@$REMOTE_HOST:$DEPLOY_DIR/sandbox.Dockerfile
 
+# 4.5 注入自动化热补丁 (切换 Google API SDK)
+echo "步骤 4.5: 应用自动化热补丁 (切换 AI SDK)..."
+ssh -i $SSH_KEY $REMOTE_USER@$REMOTE_HOST << 'ENDSSH'
+  set -e
+  cd /home/milk/atoms-demo/atoms-demo/atoms-demo
+  
+  # 安装 Google SDK 依赖
+  echo "正在安装 @ai-sdk/google..."
+  npm install @ai-sdk/google --legacy-peer-deps || true
+  
+  # 运行 Python 脚本修复代码和配置
+  cat << 'EOF_PY' > /tmp/hotfix.py
+import sys
+import yaml
+import re
+
+# 修复 route.ts 逻辑
+route_path = 'src/app/api/chat/route.ts'
+with open(route_path, 'r') as f:
+    text = f.read()
+
+if 'createOpenRouter' in text:
+    text = re.sub(r"import \{ createOpenRouter \} from '@openrouter/ai-sdk-provider';", "import { google } from '@ai-sdk/google';", text)
+    parts = text.split("const openrouter = createOpenRouter({")
+    if len(parts) > 1:
+        end_idx = parts[1].find("});")
+        if end_idx != -1:
+            text = parts[0] + "// const openrouter = disabled\n" + parts[1][end_idx+3:]
+    
+    # 使用正则替换 openrouter 调用
+    text = re.sub(r'model:\s*openrouter\(modelId\)', 'model: google(modelId)', text)
+    with open(route_path, 'w') as f:
+        f.write(text)
+    print('已自动修复 route.ts，切换为 @ai-sdk/google')
+
+# 修复 docker-compose.yml
+file_path = 'docker-compose.yml'
+with open(file_path, 'r') as f:
+    config = yaml.safe_load(f)
+
+if 'env_file' not in config.get('services', {}).get('app', {}):
+    config['services']['app']['environment'] = ['NODE_ENV=production'] # 清理冗余配置避免冲突
+    config['services']['app']['env_file'] = ['.env']
+    with open(file_path, 'w') as f:
+        yaml.dump(config, f, default_flow_style=False)
+    print('已自动修复 docker-compose.yml，开启 env_file')
+EOF_PY
+
+  python3 /tmp/hotfix.py
+ENDSSH
+
 # 5. 远程执行构建和部署
 echo "步骤 5: 远程执行构建和部署..."
 ssh -i $SSH_KEY $REMOTE_USER@$REMOTE_HOST << ENDSSH
