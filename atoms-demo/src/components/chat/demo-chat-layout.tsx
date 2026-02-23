@@ -78,24 +78,14 @@ export default function DemoChatLayout() {
                 setActiveStep(0);
                 setIsGenerating(false);
                 setDemoStage(4);
-                renderCode();
+                setCodeContent(DEMO_CODE);
             }
         };
 
         nextStep();
     };
 
-    const renderCode = () => {
-        setCodeContent(DEMO_CODE);
-        if (iframeRef.current) {
-            const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
-            if (doc) {
-                doc.open();
-                doc.write(DEMO_CODE);
-                doc.close();
-            }
-        }
-    };
+
 
     return (
         <div className="flex h-screen w-full bg-slate-50 overflow-hidden text-slate-900">
@@ -212,8 +202,8 @@ export default function DemoChatLayout() {
                         <button
                             disabled={true}
                             className={`p-3 rounded-xl ml-2 flex-shrink-0 transition-colors ${inputValue.length > 0 && !isGenerating
-                                    ? 'bg-slate-900 text-white hover:bg-slate-800'
-                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                ? 'bg-slate-900 text-white hover:bg-slate-800'
+                                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                                 }`}
                         >
                             <Send size={18} />
@@ -253,10 +243,10 @@ export default function DemoChatLayout() {
                         codeContent ? (
                             <div className="w-full h-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative fade-in" >
                                 <iframe
-                                    ref={iframeRef}
                                     className="w-full h-full border-0"
                                     title="Demo Preview"
                                     sandbox="allow-scripts"
+                                    srcDoc={codeContent}
                                 />
                             </div>
                         ) : (
