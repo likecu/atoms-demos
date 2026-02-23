@@ -4,7 +4,7 @@ import "./globals.css";
 import { AppProvider } from "@/lib/context";
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "@/components/ui/toaster";
-import ConsoleLogger from "@/components/debug/console-logger";
+
 import ErrorBoundary from "@/components/debug/error-boundary";
 
 const geistSans = Geist({
@@ -38,7 +38,7 @@ export default function RootLayout({
               {children}
             </ErrorBoundary>
             <Toaster />
-            <ConsoleLogger />
+
           </AuthProvider>
         </AppProvider>
       </body>
