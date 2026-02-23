@@ -98,13 +98,22 @@ export class SandboxManager {
             }
             // We can remove it to save resources, or just stop it. 
             // Removing ensures a clean slate next time and frees up name.
-            await container.remove();
-            console.log(`[Sandbox] Stopped and removed sandbox for ${userId}`);
+            try {
+                await container.remove();
+                console.log(`[Sandbox] Stopped and removed sandbox for ${userId}`);
+            } catch (error: any) {
+                // Ignore if container is already being removed (409) or not found (404)
+                if (error.statusCode === 409 || error.statusCode === 404) {
+                    console.log(`[Sandbox] Container ${containerName} removal already in progress or not found.`);
+                } else {
+                    throw error;
+                }
+            }
         }
     }
 
     // Limit max concurrent sandboxes
-    private readonly MAX_SANDBOXES = 5;
+    private readonly MAX_SANDBOXES = parseInt(process.env.MAX_SANDBOXES || '5', 10);
 
     /**
      * Get or create a sandbox container for the user

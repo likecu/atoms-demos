@@ -407,7 +407,7 @@ export async function POST(req: Request) {
       const content = typeof lastMessage.content === 'string'
         ? lastMessage.content
         : JSON.stringify(lastMessage.content);
-      userMessageId = await saveMessage(projectId, 'user', content);
+      userMessageId = await saveMessage(projectId, 'user', content, false);
     }
 
     // Get user MCP config
@@ -428,7 +428,7 @@ export async function POST(req: Request) {
 
         // 仅主代理保存最终消息到 messages 表
         if (projectId && finalText) {
-          await saveMessage(projectId, 'assistant', finalText);
+          await saveMessage(projectId, 'assistant', finalText, true);
 
           // 记录最终 Output Log
           await saveAICallLog({
@@ -443,7 +443,6 @@ export async function POST(req: Request) {
         }
       } catch (error: any) {
         log(`[Background] Root Error: ${error.message}`);
-        // Log handled in runAgent, but we might want to ensure a final ERROR log at top level?
       }
     })();
 

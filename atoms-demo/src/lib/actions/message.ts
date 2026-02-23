@@ -79,25 +79,32 @@ export async function getMessagesByProjectId(projectId: string): Promise<Message
 export async function saveMessage(
     projectId: string,
     role: 'user' | 'assistant' | 'system',
-    content: string
+    content: string,
+    isSystemAction: boolean = false
 ): Promise<string | null> {
-    const userId = await getCurrentUserId()
-    if (!userId) {
-        return null
-    }
+    let supabase;
+    if (isSystemAction) {
+        supabase = createServiceRoleClient()
+    } else {
+        const userId = await getCurrentUserId()
+        if (!userId) {
+            console.error('[saveMessage] No userId found for non-system action')
+            return null
+        }
+        supabase = await createServerSupabaseClient()
 
-    const supabase = await createServerSupabaseClient()
+        // 验证项目属于当前用户
+        const { data: project } = await supabase
+            .from('projects')
+            .select('id')
+            .eq('id', projectId)
+            .eq('user_id', userId)
+            .single()
 
-    // 首先验证项目属于当前用户
-    const { data: project } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('id', projectId)
-        .eq('user_id', userId)
-        .single()
-
-    if (!project) {
-        return null
+        if (!project) {
+            console.error('[saveMessage] Project not found or access denied')
+            return null
+        }
     }
 
     const { data, error } = await supabase
@@ -132,25 +139,30 @@ export async function saveMessage(
  */
 export async function saveMessages(
     projectId: string,
-    messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
+    messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
+    isSystemAction: boolean = false
 ): Promise<void> {
-    const userId = await getCurrentUserId()
-    if (!userId || messages.length === 0) {
-        return
-    }
+    let supabase;
+    if (isSystemAction) {
+        supabase = createServiceRoleClient()
+    } else {
+        const userId = await getCurrentUserId()
+        if (!userId || messages.length === 0) {
+            return
+        }
+        supabase = await createServerSupabaseClient()
 
-    const supabase = await createServerSupabaseClient()
+        // 首先验证项目属于当前用户
+        const { data: project } = await supabase
+            .from('projects')
+            .select('id')
+            .eq('id', projectId)
+            .eq('user_id', userId)
+            .single()
 
-    // 首先验证项目属于当前用户
-    const { data: project } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('id', projectId)
-        .eq('user_id', userId)
-        .single()
-
-    if (!project) {
-        return
+        if (!project) {
+            return
+        }
     }
 
     const messagesToInsert = messages.map(msg => ({
