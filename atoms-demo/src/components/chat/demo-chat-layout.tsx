@@ -245,7 +245,7 @@ export default function DemoChatLayout() {
                                 <iframe
                                     className="w-full h-full border-0"
                                     title="Demo Preview"
-                                    sandbox="allow-scripts"
+                                    sandbox="allow-scripts allow-forms"
                                     srcDoc={codeContent}
                                 />
                             </div>
