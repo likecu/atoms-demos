@@ -217,7 +217,7 @@ export default function DemoChatLayout() {
             </div >
 
             {/* Main Area: Preview */}
-            < div className="flex-1 bg-slate-100 flex flex-col relative inner-shadow" >
+            < div className="flex-1 bg-slate-100 flex flex-col relative inner-shadow min-w-0 overflow-hidden" >
                 {/* Topbar for Preview */}
                 < div className="h-16 flex items-center justify-between px-6 bg-white/50 backdrop-blur-sm border-b border-slate-200" >
                     <div className="flex space-x-2">
@@ -266,7 +266,7 @@ export default function DemoChatLayout() {
                                     />
                                 </div>
                             ) : (
-                                <div className="w-full h-full bg-slate-900 rounded-2xl shadow-sm border border-slate-700 overflow-hidden relative fade-in flex flex-col">
+                                <div className="w-full h-full bg-slate-900 rounded-2xl shadow-sm border border-slate-700 overflow-hidden relative fade-in flex flex-col min-w-0">
                                     {/* Code 视图顶栏 */}
                                     <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800 border-b border-slate-700">
                                         <div className="flex items-center gap-2">
@@ -282,7 +282,7 @@ export default function DemoChatLayout() {
                                                 {codeContent.split('\n').map((line, i) => (
                                                     <div key={i} className="flex hover:bg-slate-800/50 -mx-4 px-4">
                                                         <span className="inline-block w-10 text-right mr-4 text-slate-600 select-none flex-shrink-0">{i + 1}</span>
-                                                        <span className="text-slate-300 whitespace-pre">{line}</span>
+                                                        <span className="text-slate-300 whitespace-pre break-all">{line}</span>
                                                     </div>
                                                 ))}
                                             </code>
