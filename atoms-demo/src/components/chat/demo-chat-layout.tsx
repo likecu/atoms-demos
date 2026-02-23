@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Send, Sparkles, Loader2, Play } from 'lucide-react';
+import { ArrowLeft, Send, Sparkles, Loader2, Play, Code, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DEMO_SCRIPT, DEMO_CODE } from '@/lib/demo-data';
 
@@ -13,6 +13,7 @@ export default function DemoChatLayout() {
     const [demoStage, setDemoStage] = useState(0); // 0: initial, 1: typing, 2: thinking, 3: coding, 4: done
     const [activeStep, setActiveStep] = useState(0);
     const [codeContent, setCodeContent] = useState('');
+    const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -225,8 +226,22 @@ export default function DemoChatLayout() {
                         <div className="w-3 h-3 rounded-full bg-green-400"></div>
                     </div>
                     <div className="flex bg-slate-200/50 rounded-lg p-1">
-                        <button className="px-4 py-1.5 text-sm font-medium rounded-md bg-white shadow-sm text-slate-700">Preview</button>
-                        <button className="px-4 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-700 transition-colors">Code</button>
+                        <button
+                            onClick={() => setViewMode('preview')}
+                            className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-1.5 transition-all ${viewMode === 'preview' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                        >
+                            <Eye size={14} />
+                            Preview
+                        </button>
+                        <button
+                            onClick={() => setViewMode('code')}
+                            className={`px-4 py-1.5 text-sm font-medium rounded-md flex items-center gap-1.5 transition-all ${viewMode === 'code' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                        >
+                            <Code size={14} />
+                            Code
+                        </button>
                     </div>
                     <div className="flex items-center gap-3">
                         {demoStage === 4 && (
@@ -238,17 +253,43 @@ export default function DemoChatLayout() {
                 </div >
 
                 {/* Content Area */}
-                < div className="flex-1 p-4 lg:p-8 overflow-hidden flex items-center justify-center" >
+                <div className="flex-1 p-4 lg:p-8 overflow-hidden flex items-center justify-center" >
                     {
                         codeContent ? (
-                            <div className="w-full h-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative fade-in" >
-                                <iframe
-                                    className="w-full h-full border-0"
-                                    title="Demo Preview"
-                                    sandbox="allow-scripts allow-forms"
-                                    srcDoc={codeContent}
-                                />
-                            </div>
+                            viewMode === 'preview' ? (
+                                <div className="w-full h-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative fade-in" >
+                                    <iframe
+                                        className="w-full h-full border-0"
+                                        title="Demo Preview"
+                                        sandbox="allow-scripts allow-forms"
+                                        srcDoc={codeContent}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="w-full h-full bg-slate-900 rounded-2xl shadow-sm border border-slate-700 overflow-hidden relative fade-in flex flex-col">
+                                    {/* Code 视图顶栏 */}
+                                    <div className="flex items-center justify-between px-4 py-2.5 bg-slate-800 border-b border-slate-700">
+                                        <div className="flex items-center gap-2">
+                                            <Code size={14} className="text-emerald-400" />
+                                            <span className="text-sm text-slate-300 font-mono">index.html</span>
+                                        </div>
+                                        <span className="text-xs text-slate-500 font-mono">{codeContent.split('\n').length} lines</span>
+                                    </div>
+                                    {/* 代码内容 */}
+                                    <div className="flex-1 overflow-auto">
+                                        <pre className="p-4 text-sm leading-relaxed font-mono">
+                                            <code>
+                                                {codeContent.split('\n').map((line, i) => (
+                                                    <div key={i} className="flex hover:bg-slate-800/50 -mx-4 px-4">
+                                                        <span className="inline-block w-10 text-right mr-4 text-slate-600 select-none flex-shrink-0">{i + 1}</span>
+                                                        <span className="text-slate-300 whitespace-pre">{line}</span>
+                                                    </div>
+                                                ))}
+                                            </code>
+                                        </pre>
+                                    </div>
+                                </div>
+                            )
                         ) : (
                             <div className="flex flex-col items-center justify-center text-slate-400 animate-pulse-slow">
                                 <div className="w-24 h-24 mb-6 rounded-3xl bg-slate-200 border-2 border-dashed border-slate-300 flex items-center justify-center">
