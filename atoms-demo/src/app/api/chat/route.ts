@@ -55,14 +55,10 @@ async function runAgent({
 Your goal is to help users build web applications and manage their development environment.
 
 MANDATORY DEVELOPMENT WORKFLOW:
-DEVELOP DIRECTLY: When the user requests to write code or build a feature, you MUST ACT DIRECTLY and write the code yourself using the provided tools (like writeFile). You DO NOT need to dispatch subagents or follow a multi-step workflow like Product Manager -> Developer -> Tester. 
+DEVELOP DIRECTLY: When the user requests to write code or build a feature, you MUST ACT DIRECTLY and write the code yourself using the provided tools (like writeFile).
 You possess full coding capabilities and should write the code yourself to fulfill the user's request quickly.
 
-If you DO choose to dispatch subagents for an extremely complex task, always provide a clear \`name\` for each subagent you dispatch so the user knows exactly who is working.
-
-
-
-CODE GENERATION GUIDELINES(Inform your developer subagents to follow these):
+CODE GENERATION GUIDELINES:
 When generating web UI code for preview, ALWAYS follow these rules:
 
     1. ** For React components(PREFERRED) **:
@@ -110,7 +106,6 @@ AVAILABLE TOOLS:
 - writeFile: Create or update files
 - listFiles: List directory contents
 - search_web: Perform web searches to find information
-- dispatch_subagent: Dispatch complex sub-tasks to specialized agents
 
 When the user asks to:
 1. Run commands → Use executeBash
@@ -118,7 +113,6 @@ When the user asks to:
 3. Create/modify files → Use writeFile
 4. Browse files → Use listFiles
 5. Search internet → Use search_web
-6. Perform complex research or multi-step coding → Use dispatch_subagent
 
 Always use tools when appropriate. Provide clear explanations of what you're doing.
 
@@ -127,93 +121,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
   // 获取基础工具
   const baseTools = getTools(projectId);
 
-  // 添加 Subagent 调度工具
-  const tools = {
-    ...baseTools,
-    // @ts-ignore
-    dispatch_subagent: tool({
-      description: 'Dispatch a task to a specialized subagent. Use this for complex sub-tasks. The subagent will run in parallel if called multiple times.',
-      parameters: z.object({
-        agent_role: z.enum(['researcher', 'coder', 'critic', 'planner', 'product_manager', 'frontend_developer', 'backend_developer', 'test_engineer']).describe('The role of the subagent.'),
-        name: z.string().describe('A suitable display name for this subagent (e.g. "产品经理").'),
-        task_description: z.string().describe('Detailed instructions for the subagent.'),
-        context: z.string().optional().describe('Additonal context or data needed by the subagent.')
-      }),
-      // @ts-ignore
-      execute: async (args: any, context: any) => {
-        const { toolCallId } = context as any;
-        let { agent_role, task_description, context: agentContext } = args;
-
-        log(`${prefix} Dispatching subagent args: ${JSON.stringify(args)
-          } `);
-
-        const subMessages = [
-          { role: 'system', content: `You are a specialized agent with role: ${agent_role}.\nContext: ${agentContext || 'None'} ` },
-          { role: 'user', content: task_description }
-        ];
-
-        try {
-          // Log start of subagent execution
-          await saveAICallLog({
-            project_id: projectId,
-            message_id: userMessageId,
-            parent_log_id: toolCallId,
-            agent_label: agent_role,
-            step_type: 'thinking',
-            content: `Subagent ${agent_role} started execution...`,
-            metadata: {
-              depth: depth + 1
-            }
-          });
-
-          // 递归调用
-          const result = await runAgent({
-            projectId,
-            userMessageId,
-            messages: subMessages,
-            parentLogId: toolCallId, // 将当前工具调用ID作为子代理的父ID
-            agentLabel: agent_role,
-            depth: depth + 1,
-            mcpConfig // Pass basic MCP config to subagents too? Yes.
-          });
-
-          return {
-            status: 'success',
-            result: result
-          };
-        } catch (error: any) {
-          log(`${prefix} Subagent failed: ${error.message} `);
-
-          // Log error to database so UI sees it
-          await saveAICallLog({
-            project_id: projectId,
-            message_id: userMessageId,
-            parent_log_id: toolCallId,
-            agent_label: agent_role,
-            step_type: 'thinking', // using thinking to show error message in UI stream
-            content: `Subagent failed: ${error.message} `,
-            metadata: {
-              error: true,
-              depth: depth + 1
-            }
-          });
-
-          return {
-            status: 'error',
-            error: error.message
-          };
-        }
-      }
-    }) as any
-  };
-
-  // Filter out dispatch_subagent if depth > 0 to prevent infinite recursion for now
-  if (depth > 0) {
-    const { dispatch_subagent, ...restTools } = tools;
-  }
-
-  // Actually, to make it cleaner, let's just define effectiveTools
-  const effectiveTools = depth > 0 ? (({ dispatch_subagent, ...rest }) => rest)(tools) : tools;
+  const effectiveTools = baseTools;
 
   let stepCounter = 0;
 
