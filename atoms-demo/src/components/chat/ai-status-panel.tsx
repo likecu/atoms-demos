@@ -295,11 +295,14 @@ function SubAgentGrid({ nodes, onSelect, selectedId }: { nodes: LogNode[], onSel
 function AgentCard({ node, onSelect, selectedId }: { node: LogNode, onSelect: (log: AICallLog) => void, selectedId?: string }) {
     const [isExpanded, setIsExpanded] = useState(true);
 
-    // Extract Agent Role from args if possible
-    let agentRole = "Sub-agent";
+    // Extract Agent Name and Role from args if possible
+    let agentName = "Sub-agent";
+    let agentRole = "Assistant";
     try {
-        if (node.metadata?.args && (node.metadata.args as any).agent_role) {
-            agentRole = (node.metadata.args as any).agent_role;
+        if (node.metadata?.args) {
+            const args = node.metadata.args as any;
+            agentName = args.name || args.agent_name || args.role || args.agent_role || "Sub-agent";
+            agentRole = args.role || args.agent_role || "Assistant";
         }
     } catch (e) { }
 
@@ -327,11 +330,13 @@ function AgentCard({ node, onSelect, selectedId }: { node: LogNode, onSelect: (l
                     </div>
                     <div>
                         <div className="text-xs font-semibold text-zinc-200 flex items-center gap-2">
-                            {agentRole.toUpperCase()}
+                            {agentName}
                             {isCompleted && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
                         </div>
-                        <div className="text-[10px] text-zinc-500 font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                            ID: {node.metadata?.toolCallId?.slice(0, 8) || 'Unknown'}
+                        <div className="text-[10px] text-zinc-500 font-mono mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity flex gap-1.5 items-center">
+                            <span>ID: {node.metadata?.toolCallId?.slice(0, 8) || 'Unknown'}</span>
+                            <span>•</span>
+                            <span className="capitalize">{agentRole.replace(/_/g, ' ')}</span>
                         </div>
                     </div>
                 </div>

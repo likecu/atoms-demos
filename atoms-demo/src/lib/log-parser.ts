@@ -2,6 +2,48 @@ import { AICallLog } from "./actions/message";
 import { AgentNode, FileNode } from "./workspace-context";
 import { FileItem } from "./actions/files";
 
+function getAgentName(args: any): string {
+    if (!args) return '子代理';
+    const role = args.role || args.agent_role;
+
+    const nameMap: Record<string, string> = {
+        'Product Manager': '产品经理',
+        'Frontend Developer': '前端开发',
+        'Backend Developer': '后端开发',
+        'Test Engineer': '测试工程师',
+        'Sub-Agent': '子代理',
+        'Sub-agent': '子代理'
+    };
+
+    if (args.name && nameMap[args.name]) {
+        return nameMap[args.name];
+    }
+
+    if (args.name && args.name !== 'Sub-Agent' && args.name !== 'Sub-agent') {
+        return args.name;
+    }
+    if (args.agent_name) {
+        return args.agent_name;
+    }
+
+    const roleMap: Record<string, string> = {
+        'product_manager': '产品经理',
+        'frontend_developer': '前端开发',
+        'backend_developer': '后端开发',
+        'test_engineer': '测试工程师',
+        'researcher': '研究员',
+        'coder': '程序员',
+        'critic': '代码审查员',
+        'planner': '规划师'
+    };
+
+    if (role && roleMap[role]) {
+        return roleMap[role];
+    }
+
+    return '子代理';
+}
+
 /**
  * Parses raw AI Call Logs into a list of AgentNodes for the Orchestration View.
  */
@@ -14,11 +56,10 @@ export function parseLogsToAgents(logs: AICallLog[]): AgentNode[] {
             const args = log.metadata.args as any;
             const agentId = log.metadata.toolCallId || log.id;
 
-            // Check if agent already exists (maybe initialized earlier)
             if (!agents.has(agentId)) {
                 agents.set(agentId, {
                     id: agentId,
-                    name: args.name || args.agent_name || 'Sub-Agent',
+                    name: getAgentName(args),
                     role: args.role || args.agent_role || 'Assistant',
                     status: 'working', // Default to working when dispatched
                     currentTask: 'Initializing...',
