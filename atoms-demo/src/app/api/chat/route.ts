@@ -175,6 +175,20 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
 
         if (!task_description) {
           log(`${prefix} Error: Missing required arguments for subagent dispatch.`);
+
+          await saveAICallLog({
+            project_id: projectId,
+            message_id: userMessageId,
+            parent_log_id: toolCallId,
+            agent_label: agent_role,
+            step_type: 'thinking',
+            content: `Error: Missing required arguments: task_description (or task/description/query) is required.`,
+            metadata: {
+              error: true,
+              depth: depth + 1
+            }
+          });
+
           return {
             status: 'error',
             error: 'Missing required arguments: task_description (or task/description/query) is required.'

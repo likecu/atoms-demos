@@ -43,6 +43,8 @@ type LogNode = AICallLog & {
     depth: number
     // Helper boolean to identify if this node represents a Sub-agent usage (the initial dispatch tool call)
     isSubAgentDispatch?: boolean
+    // Indicates if physical tool result has been recorded
+    isCompleted?: boolean
 }
 
 // --- Logic: Tree Construction ---
@@ -78,6 +80,14 @@ function buildLogTree(logs: AICallLog[]): LogNode[] {
 
     logs.forEach(log => {
         const node = nodeMap.get(log.id)!;
+
+        // 如果这是一条工具返回的结果（比如 dispatch_subagent 执行完毕返回的 result），
+        // 它会通过 toolCallId 去寻找谁发起调用的
+        if (log.step_type === 'tool_result' && log.metadata?.toolCallId && toolCallIdMap.has(log.metadata.toolCallId)) {
+            const originatorNode = toolCallIdMap.get(log.metadata.toolCallId)!;
+            originatorNode.isCompleted = true;
+        }
+
         let parent: LogNode | undefined;
 
         // 尝试通过 parent_log_id 查找父节点 (标准 ID 链接)
@@ -198,6 +208,11 @@ function NodeList({ nodes, onSelect, selectedId }: { nodes: LogNode[], onSelect:
             // Add to parallel group
             currentParallelGroup.push(node);
         } else {
+            // Check if this node is just the tool_result of a subagent dispatch.
+            // If so, we can optionally hide it since the AgentCard already handles the status,
+            // or we keep it. Given UI clutter, let's keep it but it visually sits outside the AgentCard
+            // since dispatch result uses parent_log_id=null (usually).
+
             // Standard node, flush any accumulated parallel group first
             flushParallelGroup();
             items.push(
@@ -290,13 +305,7 @@ function AgentCard({ node, onSelect, selectedId }: { node: LogNode, onSelect: (l
 
     // Determine Status
     const hasError = node.children.some(c => c.metadata?.error);
-    const isCompleted = node.children.some(c => c.step_type === 'tool_result' && c.metadata?.toolCallId === node.metadata?.toolCallId);
-    // Note: dispatch_subagent returns a simple success result wrapper, likely immediate, 
-    // but the sub-agent execution logs are CHILDREN of this node.
-
-    // If we want to check if the sub-agent *logic* inside is done, we might check for the last child being output?
-    // But 'runAgent' returns text, which is saved as 'tool_result' of the dispatch call.
-    // So if 'tool_result' exists in children (linked by parent_log_id=toolCallId), then it's done.
+    const isCompleted = node.isCompleted;
 
     const statusColor = hasError ? 'text-red-400 bg-red-500/10' :
         isCompleted ? 'text-emerald-400 bg-emerald-500/10' :
