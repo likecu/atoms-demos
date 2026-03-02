@@ -120,6 +120,8 @@ function ChatPageContent({
     const [streamingStatus, setStreamingStatus] = useState<StreamingStatus>('idle')
     const [activeTab, setActiveTab] = useState<'workspace' | 'preview' | 'terminal' | 'files' | 'ai-status'>('workspace') // Modified tabs
     const [aiLogs, setAiLogs] = useState<AICallLog[]>(initialAILogs || [])
+    const [hasWorkspaceRedDot, setHasWorkspaceRedDot] = useState(false)
+    const prevAiLogsLength = useRef(initialAILogs?.length || 0)
     const [isEditingName, setIsEditingName] = useState(false)
     const [currentProjectName, setCurrentProjectName] = useState(projectName)
     const [isRenaming, setIsRenaming] = useState(false)
@@ -180,6 +182,22 @@ function ChatPageContent({
         }
     }, [initialAILogs, dispatch]);
 
+    // Update red dot when new AI logs arrive
+    useEffect(() => {
+        if (aiLogs.length > prevAiLogsLength.current) {
+            if (activeTab !== 'workspace') {
+                setHasWorkspaceRedDot(true)
+            }
+        }
+        prevAiLogsLength.current = aiLogs.length
+    }, [aiLogs.length, activeTab])
+
+    // Clear red dot when workspace tab is active
+    useEffect(() => {
+        if (activeTab === 'workspace') {
+            setHasWorkspaceRedDot(false)
+        }
+    }, [activeTab])
 
     /**
      * 解析 AI 响应并更新代码
@@ -578,12 +596,15 @@ function ChatPageContent({
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => setActiveTab('workspace')}
-                                    className={`h-7 px-3 text-xs gap-2 rounded-md ${activeTab === 'workspace'
+                                    className={`relative h-7 px-3 text-xs gap-2 rounded-md ${activeTab === 'workspace'
                                         ? 'bg-zinc-800 text-white shadow-sm'
                                         : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
                                 >
                                     <LayoutGrid className="w-3 h-3" />
                                     <span>Workspace</span>
+                                    {hasWorkspaceRedDot && activeTab !== 'workspace' && (
+                                        <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                                    )}
                                 </Button>
                                 <Button
                                     variant="ghost"
