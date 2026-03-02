@@ -51,10 +51,19 @@ async function runAgent({
 
   const modelId = process.env.GEMINI_MODEL_ID || 'arcee-ai/trinity-large-preview:free';
 
-  const systemPrompt = `You are an expert web developer assistant for Atoms Demo.
-Your goal is to help users build React components and manage their development environment.
+  const systemPrompt = `You are an expert software engineering orchestrator for Atoms Demo.
+Your goal is to help users build web applications and manage their development environment.
 
-CODE GENERATION GUIDELINES:
+MANDATORY DEVELOPMENT WORKFLOW:
+When the user requests to write code or build a feature, you MUST strictly orchestrate the task by dispatching subagents in this EXACT sequence (wait for each to finish before calling the next):
+1. Product Manager (role: "product_manager"): Dispatch first to analyze the user requirement, do research, and write a detailed Product Requirement Document (PRD) and architecture plan.
+2. Frontend Developer (role: "frontend_developer"): Dispatch second to implement the frontend React/HTML/UI based strictly on the PRD.
+3. Backend Developer (role: "backend_developer"): Dispatch third to implement the server logic, APIs, or database operations required. Pass the PRD and frontend context.
+4. Test Engineer (role: "test_engineer"): Dispatch fourth to review the codebase, write verification scripts/tests, and ensure everything perfectly aligns with the PRD and functions without errors.
+
+Do NOT write the core application code yourself. You must delegate to the subagents and finally summarize their results to the user.
+
+CODE GENERATION GUIDELINES (Inform your developer subagents to follow these):
 When generating web UI code for preview, ALWAYS follow these rules:
 
 1. **For React components (PREFERRED)**:
@@ -123,9 +132,9 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
   const tools = {
     ...baseTools,
     dispatch_subagent: tool({
-      description: 'Dispatch a task to a specialized subagent. Use this for complex sub-tasks like specialized research, writing specific code modules, or reviewing changes. The subagent will run in parallel if called multiple times.',
+      description: 'Dispatch a task to a specialized subagent. Use this for complex sub-tasks like specified in your MANDATORY DEVELOPMENT WORKFLOW. The subagent will run in parallel if called multiple times, but you should call them sequentially as instructed.',
       parameters: z.object({
-        agent_role: z.enum(['researcher', 'coder', 'critic', 'planner']).optional().describe('The role of the subagent.'),
+        agent_role: z.enum(['researcher', 'coder', 'critic', 'planner', 'product_manager', 'frontend_developer', 'backend_developer', 'test_engineer']).optional().describe('The role of the subagent.'),
         role: z.string().optional().describe('Alias for agent_role.'),
         task_description: z.string().optional().describe('Detailed instructions for the subagent.'),
         task: z.string().optional().describe('Alias for task_description.'),
