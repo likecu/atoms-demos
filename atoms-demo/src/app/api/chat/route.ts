@@ -258,6 +258,10 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
       messages: messages,
       tools: effectiveTools,
 
+      // Fire and forget promises to avoid blocking AI loop
+      // These will run in the background. Node.js event loop will process them.
+
+
       // 智能停止条件: AI自然完成、达到步数上限或检测到循环
       stopWhen: (steps: any) => {
         const stepsArray = Array.isArray(steps) ? steps : (steps as any).steps;
@@ -297,7 +301,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
 
         // 记录思考文本
         if (text) {
-          await saveAICallLog({
+          saveAICallLog({
             project_id: projectId,
             message_id: userMessageId,
             parent_log_id: parentLogId,
@@ -310,7 +314,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
               usage,
               depth
             }
-          });
+          }).catch(err => log(`[Background Log Error] ${err.message}`));
         }
 
         // 记录工具调用
@@ -319,7 +323,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
             const call = toolCalls[i];
             const toolResult = toolResults?.[i];
 
-            await saveAICallLog({
+            saveAICallLog({
               project_id: projectId,
               message_id: userMessageId,
               parent_log_id: parentLogId,
@@ -333,7 +337,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
                 args: (call as any).input,
                 depth
               }
-            });
+            }).catch(err => log(`[Background Log Error] ${err.message}`));
 
             if (toolResult) {
               // 截断过长的输出
@@ -343,7 +347,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
                 ? outputStr.substring(0, limit) + `... (${outputStr.length - limit} more characters)`
                 : outputStr;
 
-              await saveAICallLog({
+              saveAICallLog({
                 project_id: projectId,
                 message_id: userMessageId,
                 parent_log_id: parentLogId,
@@ -357,7 +361,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
                   // fullResult: (toolResult as any).output, // 避免存太大的数据
                   depth
                 }
-              });
+              }).catch(err => log(`[Background Log Error] ${err.message}`));
             }
           }
         }

@@ -255,7 +255,7 @@ function ChatPageContent({
                 } catch (error) {
                     console.error('[Polling] Error fetching data:', error);
                 }
-            }, 2000);
+            }, 1000);
         }
 
         return () => {
