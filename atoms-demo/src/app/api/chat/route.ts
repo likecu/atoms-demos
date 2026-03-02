@@ -51,26 +51,25 @@ async function runAgent({
 
   const modelId = process.env.GEMINI_MODEL_ID || 'arcee-ai/trinity-large-preview:free';
 
-  const systemPrompt = `You are an expert software engineering orchestrator for Atoms Demo.
+  const systemPrompt = `You are an expert software engineering assistant for Atoms Demo.
 Your goal is to help users build web applications and manage their development environment.
 
 MANDATORY DEVELOPMENT WORKFLOW:
-When the user requests to write code or build a feature, you MUST strictly orchestrate the task by dispatching subagents in this EXACT sequence (wait for each to finish before calling the next):
-1. Product Manager (role: "product_manager", name: "产品经理"): Dispatch first to analyze the user requirement, do research, and write a detailed Product Requirement Document (PRD) and architecture plan.
-2. Frontend Developer (role: "frontend_developer", name: "前端开发"): Dispatch second to implement the frontend React/HTML/UI based strictly on the PRD.
-3. Backend Developer (role: "backend_developer", name: "后端开发"): Dispatch third to implement the server logic, APIs, or database operations required. Pass the PRD and frontend context.
-4. Test Engineer (role: "test_engineer", name: "测试工程师"): Dispatch fourth to review the codebase, write verification scripts/tests, and ensure everything perfectly aligns with the PRD and functions without errors.
+DEVELOP DIRECTLY: When the user requests to write code or build a feature, you MUST ACT DIRECTLY and write the code yourself using the provided tools (like writeFile). You DO NOT need to dispatch subagents or follow a multi-step workflow like Product Manager -> Developer -> Tester. 
+You possess full coding capabilities and should write the code yourself to fulfill the user's request quickly.
 
-Do NOT write the core application code yourself. You must delegate to the subagents and finally summarize their results to the user. Always provide a clear \`name\` for each subagent you dispatch so the user knows exactly who is working.
+If you DO choose to dispatch subagents for an extremely complex task, always provide a clear \`name\` for each subagent you dispatch so the user knows exactly who is working.
 
-CODE GENERATION GUIDELINES (Inform your developer subagents to follow these):
+
+
+CODE GENERATION GUIDELINES(Inform your developer subagents to follow these):
 When generating web UI code for preview, ALWAYS follow these rules:
 
-1. **For React components (PREFERRED)**:
-   - Create a single-file component with "export default function ComponentName()"
-   - Import required dependencies from React and libraries (lucide-react, recharts, framer-motion, etc.)
-   - Use modern React hooks and best practices
-   - Wrap code in \`\`\`jsx or \`\`\`tsx code blocks
+    1. ** For React components(PREFERRED) **:
+  - Create a single - file component with "export default function ComponentName()"
+  - Import required dependencies from React and libraries(lucide - react, recharts, framer - motion, etc.)
+    - Use modern React hooks and best practices
+      - Wrap code in \`\`\`jsx or \`\`\`tsx code blocks
    - Example:
      \`\`\`jsx
      import React, { useState } from 'react';
@@ -131,73 +130,25 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
   // 添加 Subagent 调度工具
   const tools = {
     ...baseTools,
+    // @ts-ignore
     dispatch_subagent: tool({
-      description: 'Dispatch a task to a specialized subagent. Use this for complex sub-tasks like specified in your MANDATORY DEVELOPMENT WORKFLOW. The subagent will run in parallel if called multiple times, but you should call them sequentially as instructed.',
+      description: 'Dispatch a task to a specialized subagent. Use this for complex sub-tasks. The subagent will run in parallel if called multiple times.',
       parameters: z.object({
-        agent_role: z.enum(['researcher', 'coder', 'critic', 'planner', 'product_manager', 'frontend_developer', 'backend_developer', 'test_engineer']).optional().describe('The role of the subagent.'),
-        role: z.string().optional().describe('Alias for agent_role.'),
-        name: z.string().optional().describe('A suitable display name for this subagent (e.g. "产品经理").'),
-        task_description: z.string().optional().describe('Detailed instructions for the subagent.'),
-        task: z.string().optional().describe('Alias for task_description.'),
-        description: z.string().optional().describe('Alias for task_description.'),
-        context: z.string().optional().describe('Additonal context or data needed by the subagent.'),
-        // Add loose params to catch hallucinations and prevent validation errors if loose validation is enabled
-        // But Zod will strip unknown keys unless passthrough() is used? 
-        // Actually for tool() definition, we usually keep it strict or use .catchall().
-        // Let's rely on the fact that sometimes models put stuff in valid fields.
-        // But if model provides "query", it will fail validation if not in schema?
-        // Yes, standard Zod object defaults to strip() but tool verification might fail?
-        // AI SDK might handle it. Let's add them as optional to be safe.
-        query: z.string().optional().describe('Alias/Target for research tasks.'),
-        type: z.string().optional(),
-        max_results: z.number().optional()
+        agent_role: z.enum(['researcher', 'coder', 'critic', 'planner', 'product_manager', 'frontend_developer', 'backend_developer', 'test_engineer']).describe('The role of the subagent.'),
+        name: z.string().describe('A suitable display name for this subagent (e.g. "产品经理").'),
+        task_description: z.string().describe('Detailed instructions for the subagent.'),
+        context: z.string().optional().describe('Additonal context or data needed by the subagent.')
       }),
-      execute: async (args, context) => {
+      // @ts-ignore
+      execute: async (args: any, context: any) => {
         const { toolCallId } = context as any;
         let { agent_role, task_description, context: agentContext } = args;
 
-        // Handle aliases and hallucinations
-        if (!task_description) {
-          task_description = args.task || args.description || args.query;
-        } else if (args.query) {
-          // If both exist, append query
-          task_description += `\nFocus on query: ${args.query}`;
-        }
-
-        if (args.max_results) {
-          task_description += `\nMax results: ${args.max_results}`;
-        }
-
-        if (!agent_role) {
-          agent_role = args.role || 'researcher'; // Default to researcher if role is missing
-        }
-
-        log(`${prefix} Dispatching subagent args: ${JSON.stringify(args)}`);
-
-        if (!task_description) {
-          log(`${prefix} Error: Missing required arguments for subagent dispatch.`);
-
-          await saveAICallLog({
-            project_id: projectId,
-            message_id: userMessageId,
-            parent_log_id: toolCallId,
-            agent_label: agent_role,
-            step_type: 'thinking',
-            content: `Error: Missing required arguments: task_description (or task/description/query) is required.`,
-            metadata: {
-              error: true,
-              depth: depth + 1
-            }
-          });
-
-          return {
-            status: 'error',
-            error: 'Missing required arguments: task_description (or task/description/query) is required.'
-          } as any;
-        }
+        log(`${prefix} Dispatching subagent args: ${JSON.stringify(args)
+          } `);
 
         const subMessages = [
-          { role: 'system', content: `You are a specialized agent with role: ${agent_role}.\nContext: ${agentContext || 'None'}` },
+          { role: 'system', content: `You are a specialized agent with role: ${agent_role}.\nContext: ${agentContext || 'None'} ` },
           { role: 'user', content: task_description }
         ];
 
@@ -231,7 +182,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
             result: result
           };
         } catch (error: any) {
-          log(`${prefix} Subagent failed: ${error.message}`);
+          log(`${prefix} Subagent failed: ${error.message} `);
 
           // Log error to database so UI sees it
           await saveAICallLog({
@@ -240,7 +191,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
             parent_log_id: toolCallId,
             agent_label: agent_role,
             step_type: 'thinking', // using thinking to show error message in UI stream
-            content: `Subagent failed: ${error.message}`,
+            content: `Subagent failed: ${error.message} `,
             metadata: {
               error: true,
               depth: depth + 1
@@ -257,17 +208,8 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
   };
 
   // Filter out dispatch_subagent if depth > 0 to prevent infinite recursion for now
-  // Or maybe allow 1 level? the check is at top of runAgent (depth > 3). 
-  // But if the subagent doesn't HAVE the tool, it won't try to use it and fail.
   if (depth > 0) {
-    // Remove dispatch_subagent from available tools for subagents
-    // This forces them to do the work themselves using base tools.
     const { dispatch_subagent, ...restTools } = tools;
-    // Re-assign tools to be used in generateText
-    // We need to re-declare or just pass the filtered object
-    // But 'tools' is const in this scope? No, it's const tools = ...
-    // We need to create a new variable or cast.
-    // Let's change the generateText call to use a computed tools object.
   }
 
   // Actually, to make it cleaner, let's just define effectiveTools
@@ -297,7 +239,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
 
         // 步数限制
         if (stepsArray.length >= 30) {
-          console.warn(`${prefix} Reached maximum steps (30), forcing stop`);
+          console.warn(`${prefix} Reached maximum steps(30), forcing stop`);
           return true;
         }
 
@@ -321,7 +263,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
         stepCounter++;
         const stepNum = stepCounter;
 
-        log(`${prefix} [Step ${stepNum}] Finished - Reason: ${finishReason}`);
+        log(`${prefix} [Step ${stepNum}] Finished - Reason: ${finishReason} `);
 
         // 记录思考文本
         if (text) {
@@ -338,7 +280,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
               usage,
               depth
             }
-          }).catch(err => log(`[Background Log Error] ${err.message}`));
+          }).catch(err => log(`[Background Log Error] ${err.message} `));
         }
 
         // 记录工具调用
@@ -353,7 +295,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
               parent_log_id: parentLogId,
               agent_label: agentLabel,
               step_type: 'tool_call',
-              content: `Calling ${call.toolName}`,
+              content: `Calling ${call.toolName} `,
               metadata: {
                 stepNumber: stepNum,
                 toolName: call.toolName,
@@ -361,7 +303,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
                 args: (call as any).input,
                 depth
               }
-            }).catch(err => log(`[Background Log Error] ${err.message}`));
+            }).catch(err => log(`[Background Log Error] ${err.message} `));
 
             if (toolResult) {
               // 截断过长的输出
@@ -385,7 +327,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
                   // fullResult: (toolResult as any).output, // 避免存太大的数据
                   depth
                 }
-              }).catch(err => log(`[Background Log Error] ${err.message}`));
+              }).catch(err => log(`[Background Log Error] ${err.message} `));
             }
           }
         }
@@ -396,7 +338,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
     return result.text;
 
   } catch (error: any) {
-    log(`${prefix} Error: ${error.message}`);
+    log(`${prefix} Error: ${error.message} `);
 
     await saveAICallLog({
       project_id: projectId,
@@ -404,7 +346,7 @@ ${mcpConfig ? `\nIMPORTANT: The user has provided the following specific instruc
       parent_log_id: parentLogId,
       agent_label: agentLabel,
       step_type: 'thinking', // 记录为 thinking 或新增 error 类型，这里沿用 error 如果 schema 支持
-      content: `Error: ${error.message}`,
+      content: `Error: ${error.message} `,
       metadata: { error: true, stack: error.stack }
     } as any); // cast as any in case step_type restricts 'error' strictly (interface currently only allows specific strings, but let's check)
     // Actually interface allows 'output' | 'error' ? 
@@ -426,7 +368,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { messages, projectId } = body;
 
-    log(`[API] Messages: ${messages.length}, Project: ${projectId}`);
+    log(`[API] Messages: ${messages.length}, Project: ${projectId} `);
 
     let userMessageId: string | null = null;
     const lastMessage = messages[messages.length - 1];
@@ -470,7 +412,7 @@ export async function POST(req: Request) {
           });
         }
       } catch (error: any) {
-        log(`[Background] Root Error: ${error.message}`);
+        log(`[Background] Root Error: ${error.message} `);
       }
     })();
 
@@ -487,7 +429,7 @@ export async function POST(req: Request) {
     );
 
   } catch (error: any) {
-    log(`[API] ERROR: ${error.message}`);
+    log(`[API] ERROR: ${error.message} `);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
