@@ -22,13 +22,13 @@ function getStatusText(status: StreamingStatus): string {
         case 'submitting':
             return '正在提交...';
         case 'streaming':
-            return '正在思考...';
+            return '正在运行中...';
         case 'ready':
             return '完成';
         case 'error':
             return '出错了';
         default:
-            return 'Thinking...';
+            return '运行中...';
     }
 }
 

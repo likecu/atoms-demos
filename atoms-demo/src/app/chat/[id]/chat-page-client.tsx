@@ -82,13 +82,13 @@ function getStatusText(status: StreamingStatus): string {
         case 'submitting':
             return '正在发送...'
         case 'processing':
-            return 'AI 正在思考...'
+            return 'AI 正在运行中...'
         case 'ready':
             return '生成完成'
         case 'error':
             return '出错了，请重试'
         default:
-            return '思考中...'
+            return '运行中...'
     }
 }
 
